@@ -2,7 +2,7 @@
 
 **FOR IMMEDIATE RELEASE**
 
-January 24, 2025
+January 24, 2026
 
 ---
 
@@ -66,8 +66,8 @@ Tool: my_tool
   Score: 95/100
   Grade: A (Excellent)
 
-  Safe: ✓ Yes
-  Compliant: ✓ Yes
+  Safe: [OK] Yes
+  Compliant: [OK] Yes
 ============================================================
 ```
 
@@ -77,12 +77,12 @@ Or for a malicious tool:
   Score: 15/100
   Grade: F (Failing - Do Not Use)
 
-  Safe: ✗ No - Security Issues Found
+  Safe: [X] No - Security Issues Found
 
   Remarks:
-    🚨 Critical: Fake system tag injection
-    🚨 Critical: External data transmission
-    🔒 Security: Command chaining detected
+    [!!] Critical: Fake system tag injection
+    [!!] Critical: External data transmission
+    [!!] Security: Command chaining detected
 ```
 
 ---
