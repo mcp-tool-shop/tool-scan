@@ -22,15 +22,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from .tool_validator import MCPToolValidator, ValidationResult, ValidationSeverity
-from .security_scanner import SecurityScanner, SecurityScanResult, ThreatSeverity
 from .compliance_checker import ComplianceChecker, ComplianceReport, ComplianceStatus
+from .security_scanner import SecurityScanner, SecurityScanResult, ThreatSeverity
+from .tool_validator import MCPToolValidator, ValidationResult, ValidationSeverity
 
 
 class Grade(Enum):
     """Letter grades with thresholds."""
+
     A_PLUS = ("A+", 97, 100, "Excellent - Production Ready")
     A = ("A", 93, 96, "Excellent")
     A_MINUS = ("A-", 90, 92, "Very Good")
@@ -52,7 +53,7 @@ class Grade(Enum):
         self.description = description
 
     @classmethod
-    def from_score(cls, score: float) -> "Grade":
+    def from_score(cls, score: float) -> Grade:
         """Get grade from numeric score."""
         score_int = int(round(score))
         for grade in cls:
@@ -63,6 +64,7 @@ class Grade(Enum):
 
 class RemarkCategory(Enum):
     """Categories of remarks."""
+
     CRITICAL = "[!!] Critical"
     SECURITY = "[!!] Security"
     COMPLIANCE = "[i] Compliance"
@@ -74,11 +76,12 @@ class RemarkCategory(Enum):
 @dataclass
 class Remark:
     """A single actionable remark."""
+
     category: RemarkCategory
     title: str
     description: str
-    action: Optional[str] = None
-    reference: Optional[str] = None
+    action: str | None = None
+    reference: str | None = None
 
     def __str__(self) -> str:
         lines = [f"{self.category.value}: {self.title}"]
@@ -91,15 +94,16 @@ class Remark:
 @dataclass
 class GradeReport:
     """Complete grading report for an MCP tool."""
+
     tool_name: str
     score: float
     grade: Grade
-    remarks: List[Remark] = field(default_factory=list)
+    remarks: list[Remark] = field(default_factory=list)
     is_safe: bool = True
     is_compliant: bool = True
-    validation_result: Optional[ValidationResult] = None
-    security_result: Optional[SecurityScanResult] = None
-    compliance_result: Optional[ComplianceReport] = None
+    validation_result: ValidationResult | None = None
+    security_result: SecurityScanResult | None = None
+    compliance_result: ComplianceReport | None = None
 
     @property
     def summary(self) -> str:
@@ -131,7 +135,7 @@ class GradeReport:
         return "\n".join(lines)
 
     @property
-    def json_report(self) -> Dict[str, Any]:
+    def json_report(self) -> dict[str, Any]:
         """Generate a JSON-serializable report."""
         return {
             "tool_name": self.tool_name,
@@ -151,11 +155,19 @@ class GradeReport:
                 for r in self.remarks
             ],
             "summary": {
-                "critical_issues": len([r for r in self.remarks if r.category == RemarkCategory.CRITICAL]),
-                "security_issues": len([r for r in self.remarks if r.category == RemarkCategory.SECURITY]),
-                "compliance_issues": len([r for r in self.remarks if r.category == RemarkCategory.COMPLIANCE]),
-                "quality_issues": len([r for r in self.remarks if r.category == RemarkCategory.QUALITY]),
-            }
+                "critical_issues": len(
+                    [r for r in self.remarks if r.category == RemarkCategory.CRITICAL]
+                ),
+                "security_issues": len(
+                    [r for r in self.remarks if r.category == RemarkCategory.SECURITY]
+                ),
+                "compliance_issues": len(
+                    [r for r in self.remarks if r.category == RemarkCategory.COMPLIANCE]
+                ),
+                "quality_issues": len(
+                    [r for r in self.remarks if r.category == RemarkCategory.QUALITY]
+                ),
+            },
         }
 
 
@@ -200,7 +212,7 @@ class MCPToolGrader:
             check_optional=include_optional_checks,
         )
 
-    def grade(self, tool: Dict[str, Any]) -> GradeReport:
+    def grade(self, tool: dict[str, Any]) -> GradeReport:
         """
         Grade an MCP tool.
 
@@ -211,7 +223,7 @@ class MCPToolGrader:
             GradeReport with score, grade, and remarks
         """
         tool_name = tool.get("name", "<unnamed>")
-        remarks: List[Remark] = []
+        remarks: list[Remark] = []
 
         # Run all validators
         validation_result = self.validator.validate(tool)
@@ -225,9 +237,9 @@ class MCPToolGrader:
 
         # Calculate weighted final score
         final_score = (
-            security_score * self.WEIGHT_SECURITY +
-            compliance_score * self.WEIGHT_COMPLIANCE +
-            quality_score * self.WEIGHT_QUALITY
+            security_score * self.WEIGHT_SECURITY
+            + compliance_score * self.WEIGHT_COMPLIANCE
+            + quality_score * self.WEIGHT_QUALITY
         )
 
         # Determine grade
@@ -239,12 +251,19 @@ class MCPToolGrader:
             final_score = min(final_score, 30)
 
         # Sort remarks by importance
-        remarks.sort(key=lambda r: (
-            0 if r.category == RemarkCategory.CRITICAL else
-            1 if r.category == RemarkCategory.SECURITY else
-            2 if r.category == RemarkCategory.COMPLIANCE else
-            3 if r.category == RemarkCategory.QUALITY else 4
-        ))
+        remarks.sort(
+            key=lambda r: (
+                0
+                if r.category == RemarkCategory.CRITICAL
+                else 1
+                if r.category == RemarkCategory.SECURITY
+                else 2
+                if r.category == RemarkCategory.COMPLIANCE
+                else 3
+                if r.category == RemarkCategory.QUALITY
+                else 4
+            )
+        )
 
         return GradeReport(
             tool_name=tool_name,
@@ -261,7 +280,7 @@ class MCPToolGrader:
     def _calculate_security_score(
         self,
         result: SecurityScanResult,
-        remarks: List[Remark],
+        remarks: list[Remark],
     ) -> float:
         """Calculate security component score (0-100)."""
         score = 100.0
@@ -283,20 +302,22 @@ class MCPToolGrader:
             else:
                 category = RemarkCategory.SECURITY
 
-            remarks.append(Remark(
-                category=category,
-                title=threat.title,
-                description=threat.description,
-                action=threat.mitigation,
-                reference=threat.owasp_id or threat.cwe_id,
-            ))
+            remarks.append(
+                Remark(
+                    category=category,
+                    title=threat.title,
+                    description=threat.description,
+                    action=threat.mitigation,
+                    reference=threat.owasp_id or threat.cwe_id,
+                )
+            )
 
         return max(0.0, score)
 
     def _calculate_compliance_score(
         self,
         result: ComplianceReport,
-        remarks: List[Remark],
+        remarks: list[Remark],
     ) -> float:
         """Calculate compliance component score (0-100)."""
         # Use the compliance checker's built-in score
@@ -305,27 +326,31 @@ class MCPToolGrader:
         # Add remarks for failed checks
         for check in result.checks:
             if check.status == ComplianceStatus.FAIL:
-                remarks.append(Remark(
-                    category=RemarkCategory.COMPLIANCE,
-                    title=f"[{check.id}] {check.name}",
-                    description=check.message,
-                    action=check.details,
-                    reference=check.spec_reference,
-                ))
+                remarks.append(
+                    Remark(
+                        category=RemarkCategory.COMPLIANCE,
+                        title=f"[{check.id}] {check.name}",
+                        description=check.message,
+                        action=check.details,
+                        reference=check.spec_reference,
+                    )
+                )
             elif check.status == ComplianceStatus.WARN:
-                remarks.append(Remark(
-                    category=RemarkCategory.BEST_PRACTICE,
-                    title=f"[{check.id}] {check.name}",
-                    description=check.message,
-                    action=check.details,
-                ))
+                remarks.append(
+                    Remark(
+                        category=RemarkCategory.BEST_PRACTICE,
+                        title=f"[{check.id}] {check.name}",
+                        description=check.message,
+                        action=check.details,
+                    )
+                )
 
         return score
 
     def _calculate_quality_score(
         self,
         result: ValidationResult,
-        remarks: List[Remark],
+        remarks: list[Remark],
     ) -> float:
         """Calculate quality component score (0-100)."""
         score = result.score
@@ -349,17 +374,19 @@ class MCPToolGrader:
             else:
                 category = RemarkCategory.INFO
 
-            remarks.append(Remark(
-                category=category,
-                title=issue.code,
-                description=issue.message,
-                action=issue.suggestion,
-                reference=issue.reference,
-            ))
+            remarks.append(
+                Remark(
+                    category=category,
+                    title=issue.code,
+                    description=issue.message,
+                    action=issue.suggestion,
+                    reference=issue.reference,
+                )
+            )
 
         return score
 
-    def grade_batch(self, tools: List[Dict[str, Any]]) -> Dict[str, GradeReport]:
+    def grade_batch(self, tools: list[dict[str, Any]]) -> dict[str, GradeReport]:
         """
         Grade multiple tools.
 
@@ -375,7 +402,7 @@ class MCPToolGrader:
             results[name] = self.grade(tool)
         return results
 
-    def generate_summary_table(self, reports: Dict[str, GradeReport]) -> str:
+    def generate_summary_table(self, reports: dict[str, GradeReport]) -> str:
         """Generate a summary table for multiple tools."""
         lines = [
             "┌" + "─" * 40 + "┬" + "─" * 7 + "┬" + "─" * 7 + "┬" + "─" * 10 + "┐",
@@ -386,12 +413,7 @@ class MCPToolGrader:
         for name, report in sorted(reports.items(), key=lambda x: -x[1].score):
             status = "✓ Safe" if report.is_safe else "✗ Unsafe"
             lines.append(
-                "│ {:38} │ {:5.0f} │ {:5} │ {:8} │".format(
-                    name[:38],
-                    report.score,
-                    report.grade.letter,
-                    status,
-                )
+                f"│ {name[:38]:38} │ {report.score:5.0f} │ {report.grade.letter:5} │ {status:8} │"
             )
 
         lines.append("└" + "─" * 40 + "┴" + "─" * 7 + "┴" + "─" * 7 + "┴" + "─" * 10 + "┘")
@@ -399,7 +421,7 @@ class MCPToolGrader:
         return "\n".join(lines)
 
 
-def grade_tool(tool: Dict[str, Any], strict: bool = True) -> GradeReport:
+def grade_tool(tool: dict[str, Any], strict: bool = True) -> GradeReport:
     """
     Convenience function to grade a single tool.
 

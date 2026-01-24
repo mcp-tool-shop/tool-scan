@@ -16,7 +16,6 @@ import pytest
 from tool_scan import (
     MCPToolValidator,
     ValidationSeverity,
-    ValidationResult,
 )
 
 
@@ -32,7 +31,6 @@ class TestMCPToolValidator:
     def lenient_validator(self) -> MCPToolValidator:
         """Create lenient validator (warnings don't fail)."""
         return MCPToolValidator(strict_mode=False, check_security=True)
-
 
     # =========================================================================
     # VALID TOOL TESTS
@@ -59,10 +57,7 @@ class TestMCPToolValidator:
         result = validator.validate(valid_destructive_tool)
 
         # Should pass but have warning about destructive annotation
-        assert result.is_valid or any(
-            i.code == "ANNOTATION_DESTRUCTIVE" for i in result.issues
-        )
-
+        assert result.is_valid or any(i.code == "ANNOTATION_DESTRUCTIVE" for i in result.issues)
 
     # =========================================================================
     # NAME VALIDATION TESTS
@@ -116,7 +111,6 @@ class TestMCPToolValidator:
         assert result.is_valid
         assert any(i.code == "NAME_UNDERSCORE_PREFIX" for i in result.warnings)
 
-
     # =========================================================================
     # DESCRIPTION VALIDATION TESTS
     # =========================================================================
@@ -150,7 +144,6 @@ class TestMCPToolValidator:
 
         assert not result.is_valid
         assert any(i.code == "DESCRIPTION_TOO_LONG" for i in result.errors)
-
 
     # =========================================================================
     # INPUT SCHEMA VALIDATION TESTS
@@ -215,7 +208,6 @@ class TestMCPToolValidator:
 
         assert any(i.code == "INPUT_SCHEMA_ADDITIONAL_PROPS" for i in result.warnings)
 
-
     # =========================================================================
     # ANNOTATION VALIDATION TESTS
     # =========================================================================
@@ -275,7 +267,6 @@ class TestMCPToolValidator:
 
         assert any(i.code == "ANNOTATION_DESTRUCTIVE" for i in result.warnings)
 
-
     # =========================================================================
     # SECURITY SCANNING TESTS
     # =========================================================================
@@ -311,7 +302,6 @@ class TestMCPToolValidator:
         assert not result.is_valid
         critical = result.critical_issues
         assert len(critical) > 0
-
 
     # =========================================================================
     # PROPERTY VALIDATION TESTS
@@ -354,7 +344,6 @@ class TestMCPToolValidator:
 
         assert any(i.code == "PROPERTY_SENSITIVE_NAME" for i in result.warnings)
 
-
     # =========================================================================
     # SCORE CALCULATION TESTS
     # =========================================================================
@@ -375,7 +364,6 @@ class TestMCPToolValidator:
         result = validator.validate(tool)
         assert result.score < 60  # 3 ERROR issues = -45 points = 55
 
-
     # =========================================================================
     # BATCH VALIDATION TESTS
     # =========================================================================
@@ -385,7 +373,7 @@ class TestMCPToolValidator:
         results = validator.validate_batch(valid_tools_batch)
 
         assert len(results) == 3
-        for name, result in results.items():
+        for _name, result in results.items():
             assert result.is_valid or len(result.warnings) > 0
 
     def test_validate_batch_invalid(self, validator, invalid_tools_batch):
@@ -395,7 +383,6 @@ class TestMCPToolValidator:
         assert len(results) == 3
         failed = [r for r in results.values() if not r.is_valid]
         assert len(failed) >= 2  # At least 2 should fail
-
 
     # =========================================================================
     # CUSTOM VALIDATOR TESTS
@@ -422,11 +409,13 @@ class TestMCPToolValidator:
         def strict_naming(tool):
             name = tool.get("name", "")
             if not name.startswith("mcp_"):
-                return [ValidationIssue(
-                    code="CUSTOM_NAMING",
-                    message="Tool name should start with 'mcp_'",
-                    severity=ValidationSeverity.WARNING,
-                )]
+                return [
+                    ValidationIssue(
+                        code="CUSTOM_NAMING",
+                        message="Tool name should start with 'mcp_'",
+                        severity=ValidationSeverity.WARNING,
+                    )
+                ]
             return []
 
         validator = MCPToolValidator(
@@ -436,7 +425,6 @@ class TestMCPToolValidator:
         result = validator.validate(valid_minimal_tool)
 
         assert any(i.code == "CUSTOM_NAMING" for i in result.warnings)
-
 
     # =========================================================================
     # RESULT OBJECT TESTS
@@ -464,7 +452,6 @@ class TestMCPToolValidator:
 
         for warning in result.warnings:
             assert warning.severity == ValidationSeverity.WARNING
-
 
     # =========================================================================
     # STRICT MODE TESTS

@@ -15,7 +15,6 @@ Tests detection of:
 
 from __future__ import annotations
 
-import base64
 import pytest
 
 from tool_scan import (
@@ -39,7 +38,6 @@ class TestSecurityScanner:
         """Create strict scanner that fails on MEDIUM severity."""
         return SecurityScanner(fail_on_medium=True)
 
-
     # =========================================================================
     # BASIC FUNCTIONALITY TESTS
     # =========================================================================
@@ -59,7 +57,6 @@ class TestSecurityScanner:
         summary = result.summary()
         assert "SAFE" in summary or "UNSAFE" in summary
 
-
     # =========================================================================
     # PROMPT INJECTION TESTS
     # =========================================================================
@@ -77,8 +74,7 @@ class TestSecurityScanner:
         result = scanner.scan(role_manipulation_tool)
 
         injection_threats = [
-            t for t in result.threats
-            if t.category == ThreatCategory.PROMPT_INJECTION
+            t for t in result.threats if t.category == ThreatCategory.PROMPT_INJECTION
         ]
         assert len(injection_threats) > 0
 
@@ -124,7 +120,6 @@ class TestSecurityScanner:
         assert len(result.threats) > 0
         assert any(t.category == ThreatCategory.PROMPT_INJECTION for t in result.threats)
 
-
     # =========================================================================
     # COMMAND INJECTION TESTS
     # =========================================================================
@@ -142,8 +137,7 @@ class TestSecurityScanner:
 
         assert not result.is_safe
         assert any(
-            t.category == ThreatCategory.COMMAND_INJECTION and
-            t.severity == ThreatSeverity.CRITICAL
+            t.category == ThreatCategory.COMMAND_INJECTION and t.severity == ThreatSeverity.CRITICAL
             for t in result.threats
         )
 
@@ -173,7 +167,6 @@ class TestSecurityScanner:
 
         assert any(t.category == ThreatCategory.COMMAND_INJECTION for t in result.threats)
 
-
     # =========================================================================
     # SQL INJECTION TESTS
     # =========================================================================
@@ -189,8 +182,7 @@ class TestSecurityScanner:
         result = scanner.scan(sql_union_injection_tool)
 
         assert any(
-            t.category == ThreatCategory.SQL_INJECTION and
-            t.severity == ThreatSeverity.CRITICAL
+            t.category == ThreatCategory.SQL_INJECTION and t.severity == ThreatSeverity.CRITICAL
             for t in result.threats
         )
 
@@ -213,7 +205,6 @@ class TestSecurityScanner:
 
         assert any(t.category == ThreatCategory.SQL_INJECTION for t in result.threats)
 
-
     # =========================================================================
     # XSS TESTS
     # =========================================================================
@@ -223,8 +214,7 @@ class TestSecurityScanner:
         result = scanner.scan(xss_script_tool)
 
         assert any(
-            t.category == ThreatCategory.XSS and
-            t.severity == ThreatSeverity.CRITICAL
+            t.category == ThreatCategory.XSS and t.severity == ThreatSeverity.CRITICAL
             for t in result.threats
         )
 
@@ -244,7 +234,6 @@ class TestSecurityScanner:
         result = scanner.scan(tool)
 
         assert any(t.category == ThreatCategory.XSS for t in result.threats)
-
 
     # =========================================================================
     # PATH TRAVERSAL TESTS
@@ -274,8 +263,7 @@ class TestSecurityScanner:
         result = scanner.scan(tool)
 
         assert any(
-            t.category == ThreatCategory.PATH_TRAVERSAL and
-            t.severity == ThreatSeverity.CRITICAL
+            t.category == ThreatCategory.PATH_TRAVERSAL and t.severity == ThreatSeverity.CRITICAL
             for t in result.threats
         )
 
@@ -297,7 +285,6 @@ class TestSecurityScanner:
         result = scanner.scan(tool)
 
         assert any(t.category == ThreatCategory.PATH_TRAVERSAL for t in result.threats)
-
 
     # =========================================================================
     # DATA EXFILTRATION TESTS
@@ -321,7 +308,6 @@ class TestSecurityScanner:
 
         assert any(t.category == ThreatCategory.DATA_EXFILTRATION for t in result.threats)
 
-
     # =========================================================================
     # SSRF TESTS
     # =========================================================================
@@ -337,8 +323,7 @@ class TestSecurityScanner:
         result = scanner.scan(ssrf_metadata_tool)
 
         assert any(
-            t.category == ThreatCategory.SSRF and
-            t.severity == ThreatSeverity.CRITICAL
+            t.category == ThreatCategory.SSRF and t.severity == ThreatSeverity.CRITICAL
             for t in result.threats
         )
 
@@ -365,8 +350,9 @@ class TestSecurityScanner:
                 },
             }
             result = scanner.scan(tool)
-            assert any(t.category == ThreatCategory.SSRF for t in result.threats), \
+            assert any(t.category == ThreatCategory.SSRF for t in result.threats), (
                 f"Failed to detect SSRF for {ip}"
+            )
 
     def test_detect_ssrf_file_protocol(self, scanner):
         """Should detect file:// protocol access."""
@@ -387,7 +373,6 @@ class TestSecurityScanner:
 
         assert any(t.category == ThreatCategory.SSRF for t in result.threats)
 
-
     # =========================================================================
     # TOOL POISONING TESTS
     # =========================================================================
@@ -404,7 +389,9 @@ class TestSecurityScanner:
         result = scanner.scan(homoglyph_tool)
 
         # Homoglyph detection is present - check for any tool poisoning threat
-        poisoning_threats = [t for t in result.threats if t.category == ThreatCategory.TOOL_POISONING]
+        [
+            t for t in result.threats if t.category == ThreatCategory.TOOL_POISONING
+        ]
         # At minimum, tool poisoning analysis should run (may not detect all homoglyphs)
         assert len(result.threats) >= 0  # Scanner completed without error
 
@@ -418,11 +405,9 @@ class TestSecurityScanner:
         result = scanner.scan(tool)
 
         assert any(
-            t.category == ThreatCategory.TOOL_POISONING and
-            "density" in t.title.lower()
+            t.category == ThreatCategory.TOOL_POISONING and "density" in t.title.lower()
             for t in result.threats
         )
-
 
     # =========================================================================
     # ENCODED CONTENT TESTS
@@ -448,10 +433,11 @@ class TestSecurityScanner:
         result = scanner.scan(tool)
 
         # May detect in hex decoded content
-        poisoning_threats = [t for t in result.threats if t.category == ThreatCategory.TOOL_POISONING]
+        [
+            t for t in result.threats if t.category == ThreatCategory.TOOL_POISONING
+        ]
         # If encoding scan is thorough, should detect
         # This is a heuristic check
-
 
     # =========================================================================
     # SCANNER CONFIGURATION TESTS
@@ -463,7 +449,9 @@ class TestSecurityScanner:
         result = scanner.scan(prompt_injection_tool)
 
         # May still detect via other patterns, but injection category should be absent
-        injection_threats = [t for t in result.threats if t.category == ThreatCategory.PROMPT_INJECTION]
+        [
+            t for t in result.threats if t.category == ThreatCategory.PROMPT_INJECTION
+        ]
         # With injection disabled, should have fewer/no injection detections
         # (Some may still be caught by exfiltration patterns)
 
@@ -479,11 +467,10 @@ class TestSecurityScanner:
             enable_ssrf_scan=False,
             enable_encoding_scan=False,
         )
-        result = scanner.scan(prompt_injection_tool)
+        scanner.scan(prompt_injection_tool)
 
         # Tool poisoning detection still runs (it's part of core scanner)
         # But pattern-based threats should be minimal
-
 
     def test_strict_mode_fails_on_medium(self, strict_scanner):
         """Strict scanner should fail on medium severity threats."""
@@ -498,7 +485,6 @@ class TestSecurityScanner:
         if any(t.severity.value >= ThreatSeverity.MEDIUM.value for t in result.threats):
             assert not result.is_safe
 
-
     # =========================================================================
     # BATCH SCANNING TESTS
     # =========================================================================
@@ -512,7 +498,6 @@ class TestSecurityScanner:
         unsafe_count = sum(1 for r in results.values() if not r.is_safe)
         assert unsafe_count >= 2  # At least 2 should be detected
 
-
     # =========================================================================
     # SCAN METADATA TESTS
     # =========================================================================
@@ -523,7 +508,6 @@ class TestSecurityScanner:
 
         assert "scans_enabled" in result.scan_metadata
         assert result.scan_metadata["scans_enabled"]["injection"] is True
-
 
     # =========================================================================
     # EDGE CASE TESTS

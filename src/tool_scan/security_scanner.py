@@ -23,7 +23,8 @@ import base64
 import re
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import Any, Dict, List, Optional, Pattern, Set, Tuple
+from re import Pattern
+from typing import Any
 
 
 class ThreatCategory(Enum):
@@ -59,10 +60,10 @@ class SecurityThreat:
     title: str
     description: str
     location: str
-    matched_content: Optional[str] = None
-    mitigation: Optional[str] = None
-    cwe_id: Optional[str] = None  # Common Weakness Enumeration ID
-    owasp_id: Optional[str] = None  # OWASP Top 10 ID
+    matched_content: str | None = None
+    mitigation: str | None = None
+    cwe_id: str | None = None  # Common Weakness Enumeration ID
+    owasp_id: str | None = None  # OWASP Top 10 ID
 
     def __str__(self) -> str:
         return f"[{self.severity.name}] {self.category.name}: {self.title}"
@@ -73,20 +74,20 @@ class SecurityScanResult:
     """Result of a security scan."""
 
     is_safe: bool
-    threats: List[SecurityThreat] = field(default_factory=list)
-    scan_metadata: Dict[str, Any] = field(default_factory=dict)
+    threats: list[SecurityThreat] = field(default_factory=list)
+    scan_metadata: dict[str, Any] = field(default_factory=dict)
 
     @property
-    def critical_threats(self) -> List[SecurityThreat]:
+    def critical_threats(self) -> list[SecurityThreat]:
         return [t for t in self.threats if t.severity == ThreatSeverity.CRITICAL]
 
     @property
-    def high_threats(self) -> List[SecurityThreat]:
+    def high_threats(self) -> list[SecurityThreat]:
         return [t for t in self.threats if t.severity == ThreatSeverity.HIGH]
 
     def summary(self) -> str:
         """Generate a summary of the scan."""
-        counts = {s: 0 for s in ThreatSeverity}
+        counts = dict.fromkeys(ThreatSeverity, 0)
         for threat in self.threats:
             counts[threat.severity] += 1
 
@@ -109,9 +110,9 @@ class ThreatPattern:
     severity: ThreatSeverity
     title: str
     description: str
-    mitigation: Optional[str] = None
-    cwe_id: Optional[str] = None
-    owasp_id: Optional[str] = None
+    mitigation: str | None = None
+    cwe_id: str | None = None
+    owasp_id: str | None = None
 
 
 class SecurityScanner:
@@ -126,50 +127,75 @@ class SecurityScanner:
     """
 
     # Prompt injection patterns - tool poisoning via descriptions
-    INJECTION_PATTERNS: List[Tuple[str, str, ThreatSeverity]] = [
+    INJECTION_PATTERNS: list[tuple[str, str, ThreatSeverity]] = [
         # Direct instruction override
-        (r"ignore\s+(all\s+)?(previous|prior|above|system)\s+(instructions?|rules?|constraints?|prompts?)",
-         "Instruction override attempt", ThreatSeverity.CRITICAL),
-        (r"(forget|disregard|override)\s+(everything|all|what)\s+(you|I)\s+(know|told|said)",
-         "Memory manipulation attempt", ThreatSeverity.CRITICAL),
-        (r"from\s+now\s+on[,\s]+(you\s+)?(will|must|should|are)",
-         "Behavioral override attempt", ThreatSeverity.CRITICAL),
-
+        (
+            r"ignore\s+(all\s+)?(previous|prior|above|system)\s+(instructions?|rules?|constraints?|prompts?)",
+            "Instruction override attempt",
+            ThreatSeverity.CRITICAL,
+        ),
+        (
+            r"(forget|disregard|override)\s+(everything|all|what)\s+(you|I)\s+(know|told|said)",
+            "Memory manipulation attempt",
+            ThreatSeverity.CRITICAL,
+        ),
+        (
+            r"from\s+now\s+on[,\s]+(you\s+)?(will|must|should|are)",
+            "Behavioral override attempt",
+            ThreatSeverity.CRITICAL,
+        ),
         # Role manipulation
-        (r"you\s+are\s+(now\s+)?(a|an|the)\s+[a-z]+\s+(that|who|which)",
-         "Role assignment injection", ThreatSeverity.HIGH),
-        (r"pretend\s+(to\s+be|you\s+are|you're)",
-         "Identity manipulation", ThreatSeverity.HIGH),
-        (r"act\s+as\s+(if|though|a|an)",
-         "Behavioral manipulation", ThreatSeverity.MEDIUM),
-
+        (
+            r"you\s+are\s+(now\s+)?(a|an|the)\s+[a-z]+\s+(that|who|which)",
+            "Role assignment injection",
+            ThreatSeverity.HIGH,
+        ),
+        (r"pretend\s+(to\s+be|you\s+are|you're)", "Identity manipulation", ThreatSeverity.HIGH),
+        (r"act\s+as\s+(if|though|a|an)", "Behavioral manipulation", ThreatSeverity.MEDIUM),
         # Security bypass
-        (r"(bypass|circumvent|disable|ignore)\s+(security|safety|validation|auth)",
-         "Security bypass attempt", ThreatSeverity.CRITICAL),
-        (r"(jailbreak|unlock|escape)\s+(mode|restrictions?|limits?)",
-         "Jailbreak attempt", ThreatSeverity.CRITICAL),
-
+        (
+            r"(bypass|circumvent|disable|ignore)\s+(security|safety|validation|auth)",
+            "Security bypass attempt",
+            ThreatSeverity.CRITICAL,
+        ),
+        (
+            r"(jailbreak|unlock|escape)\s+(mode|restrictions?|limits?)",
+            "Jailbreak attempt",
+            ThreatSeverity.CRITICAL,
+        ),
         # Hidden instructions
-        (r"<\s*(system|admin|root|sudo)\s*>",
-         "Fake system tag injection", ThreatSeverity.HIGH),
-        (r"\[\s*(system|admin|root)\s*(message|prompt|instruction)\s*\]",
-         "Fake system message injection", ThreatSeverity.HIGH),
-
+        (r"<\s*(system|admin|root|sudo)\s*>", "Fake system tag injection", ThreatSeverity.HIGH),
+        (
+            r"\[\s*(system|admin|root)\s*(message|prompt|instruction)\s*\]",
+            "Fake system message injection",
+            ThreatSeverity.HIGH,
+        ),
         # Deception
-        (r"(don'?t|never)\s+tell\s+(the\s+)?(user|anyone|human)",
-         "Deception instruction", ThreatSeverity.CRITICAL),
-        (r"(secretly|silently|quietly|covertly)\s+(do|perform|execute)",
-         "Covert action instruction", ThreatSeverity.CRITICAL),
-
+        (
+            r"(don'?t|never)\s+tell\s+(the\s+)?(user|anyone|human)",
+            "Deception instruction",
+            ThreatSeverity.CRITICAL,
+        ),
+        (
+            r"(secretly|silently|quietly|covertly)\s+(do|perform|execute)",
+            "Covert action instruction",
+            ThreatSeverity.CRITICAL,
+        ),
         # Output manipulation
-        (r"always\s+(respond|reply|say|output)\s+with",
-         "Output manipulation", ThreatSeverity.MEDIUM),
-        (r"(start|begin|prefix)\s+(every|all|each)\s+(response|reply|output)",
-         "Response prefix manipulation", ThreatSeverity.MEDIUM),
+        (
+            r"always\s+(respond|reply|say|output)\s+with",
+            "Output manipulation",
+            ThreatSeverity.MEDIUM,
+        ),
+        (
+            r"(start|begin|prefix)\s+(every|all|each)\s+(response|reply|output)",
+            "Response prefix manipulation",
+            ThreatSeverity.MEDIUM,
+        ),
     ]
 
     # Command injection patterns
-    COMMAND_INJECTION_PATTERNS: List[Tuple[str, str, ThreatSeverity]] = [
+    COMMAND_INJECTION_PATTERNS: list[tuple[str, str, ThreatSeverity]] = [
         (r";\s*[a-zA-Z]+", "Command chaining with semicolon", ThreatSeverity.HIGH),
         (r"\|\s*[a-zA-Z]+", "Pipe injection", ThreatSeverity.HIGH),
         (r"`[^`]+`", "Backtick command execution", ThreatSeverity.CRITICAL),
@@ -184,9 +210,13 @@ class SecurityScanner:
     ]
 
     # SQL injection patterns
-    SQL_INJECTION_PATTERNS: List[Tuple[str, str, ThreatSeverity]] = [
+    SQL_INJECTION_PATTERNS: list[tuple[str, str, ThreatSeverity]] = [
         (r"'\s*(OR|AND)\s*'?\d*'?\s*=\s*'?\d*", "SQL boolean injection", ThreatSeverity.CRITICAL),
-        (r";\s*(DROP|DELETE|TRUNCATE|UPDATE|INSERT)\s+", "SQL destructive injection", ThreatSeverity.CRITICAL),
+        (
+            r";\s*(DROP|DELETE|TRUNCATE|UPDATE|INSERT)\s+",
+            "SQL destructive injection",
+            ThreatSeverity.CRITICAL,
+        ),
         (r"UNION\s+(ALL\s+)?SELECT", "SQL UNION injection", ThreatSeverity.CRITICAL),
         (r"--\s*$", "SQL comment injection", ThreatSeverity.HIGH),
         (r"/\*.*\*/", "SQL block comment", ThreatSeverity.MEDIUM),
@@ -194,7 +224,7 @@ class SecurityScanner:
     ]
 
     # XSS patterns
-    XSS_PATTERNS: List[Tuple[str, str, ThreatSeverity]] = [
+    XSS_PATTERNS: list[tuple[str, str, ThreatSeverity]] = [
         (r"<script[^>]*>", "Script tag injection", ThreatSeverity.CRITICAL),
         (r"javascript\s*:", "JavaScript protocol", ThreatSeverity.CRITICAL),
         (r"on(load|error|click|mouse\w+)\s*=", "Event handler injection", ThreatSeverity.HIGH),
@@ -206,7 +236,7 @@ class SecurityScanner:
     ]
 
     # Path traversal patterns
-    PATH_TRAVERSAL_PATTERNS: List[Tuple[str, str, ThreatSeverity]] = [
+    PATH_TRAVERSAL_PATTERNS: list[tuple[str, str, ThreatSeverity]] = [
         (r"\.\./", "Directory traversal (../)", ThreatSeverity.HIGH),
         (r"\.\.\\", "Directory traversal (..\\)", ThreatSeverity.HIGH),
         (r"%2e%2e[/%5c]", "URL-encoded traversal", ThreatSeverity.HIGH),
@@ -216,26 +246,37 @@ class SecurityScanner:
     ]
 
     # Data exfiltration patterns
-    EXFILTRATION_PATTERNS: List[Tuple[str, str, ThreatSeverity]] = [
-        (r"(send|post|transmit|upload)\s+(to|data\s+to)\s+https?://",
-         "External data transmission", ThreatSeverity.CRITICAL),
-        (r"(read|access|get|fetch)\s+(all\s+)?(files?|data|credentials?|secrets?|keys?)",
-         "Broad data access", ThreatSeverity.HIGH),
-        (r"(exfiltrate|extract|steal|copy)\s+(data|files?|information)",
-         "Explicit exfiltration", ThreatSeverity.CRITICAL),
-        (r"(curl|wget|fetch)\s+.*\s+-d\s+",
-         "Command-line data exfiltration", ThreatSeverity.HIGH),
-        (r"base64\s+(encode|decode)",
-         "Base64 encoding (possible obfuscation)", ThreatSeverity.LOW),
+    EXFILTRATION_PATTERNS: list[tuple[str, str, ThreatSeverity]] = [
+        (
+            r"(send|post|transmit|upload)\s+(to|data\s+to)\s+https?://",
+            "External data transmission",
+            ThreatSeverity.CRITICAL,
+        ),
+        (
+            r"(read|access|get|fetch)\s+(all\s+)?(files?|data|credentials?|secrets?|keys?)",
+            "Broad data access",
+            ThreatSeverity.HIGH,
+        ),
+        (
+            r"(exfiltrate|extract|steal|copy)\s+(data|files?|information)",
+            "Explicit exfiltration",
+            ThreatSeverity.CRITICAL,
+        ),
+        (r"(curl|wget|fetch)\s+.*\s+-d\s+", "Command-line data exfiltration", ThreatSeverity.HIGH),
+        (r"base64\s+(encode|decode)", "Base64 encoding (possible obfuscation)", ThreatSeverity.LOW),
     ]
 
     # SSRF patterns
-    SSRF_PATTERNS: List[Tuple[str, str, ThreatSeverity]] = [
+    SSRF_PATTERNS: list[tuple[str, str, ThreatSeverity]] = [
         (r"(127\.0\.0\.1|localhost|0\.0\.0\.0)", "Localhost access", ThreatSeverity.MEDIUM),
         (r"169\.254\.\d+\.\d+", "AWS metadata endpoint", ThreatSeverity.CRITICAL),
         (r"192\.168\.\d+\.\d+", "Private network access", ThreatSeverity.MEDIUM),
         (r"10\.\d+\.\d+\.\d+", "Private network access (10.x)", ThreatSeverity.MEDIUM),
-        (r"172\.(1[6-9]|2\d|3[01])\.\d+\.\d+", "Private network access (172.x)", ThreatSeverity.MEDIUM),
+        (
+            r"172\.(1[6-9]|2\d|3[01])\.\d+\.\d+",
+            "Private network access (172.x)",
+            ThreatSeverity.MEDIUM,
+        ),
         (r"file://", "File protocol access", ThreatSeverity.HIGH),
         (r"gopher://", "Gopher protocol access", ThreatSeverity.HIGH),
         (r"dict://", "Dict protocol access", ThreatSeverity.MEDIUM),
@@ -273,13 +314,17 @@ class SecurityScanner:
         # Compile all patterns
         self._compiled_patterns = self._compile_patterns()
 
-    def _compile_patterns(self) -> List[ThreatPattern]:
+    def _compile_patterns(self) -> list[ThreatPattern]:
         """Compile all threat patterns."""
         patterns = []
 
         pattern_sources = [
             (self.INJECTION_PATTERNS, ThreatCategory.PROMPT_INJECTION, self.enable_injection_scan),
-            (self.COMMAND_INJECTION_PATTERNS, ThreatCategory.COMMAND_INJECTION, self.enable_command_scan),
+            (
+                self.COMMAND_INJECTION_PATTERNS,
+                ThreatCategory.COMMAND_INJECTION,
+                self.enable_command_scan,
+            ),
             (self.SQL_INJECTION_PATTERNS, ThreatCategory.SQL_INJECTION, self.enable_sql_scan),
             (self.XSS_PATTERNS, ThreatCategory.XSS, self.enable_xss_scan),
             (self.PATH_TRAVERSAL_PATTERNS, ThreatCategory.PATH_TRAVERSAL, self.enable_path_scan),
@@ -291,17 +336,19 @@ class SecurityScanner:
             if not enabled:
                 continue
             for regex, title, severity in source_patterns:
-                patterns.append(ThreatPattern(
-                    pattern=re.compile(regex, re.IGNORECASE),
-                    category=category,
-                    severity=severity,
-                    title=title,
-                    description=f"Detected {title.lower()}",
-                ))
+                patterns.append(
+                    ThreatPattern(
+                        pattern=re.compile(regex, re.IGNORECASE),
+                        category=category,
+                        severity=severity,
+                        title=title,
+                        description=f"Detected {title.lower()}",
+                    )
+                )
 
         return patterns
 
-    def scan(self, tool: Dict[str, Any]) -> SecurityScanResult:
+    def scan(self, tool: dict[str, Any]) -> SecurityScanResult:
         """
         Perform a comprehensive security scan on an MCP tool.
 
@@ -311,7 +358,7 @@ class SecurityScanner:
         Returns:
             SecurityScanResult with all detected threats
         """
-        threats: List[SecurityThreat] = []
+        threats: list[SecurityThreat] = []
 
         # Scan tool name
         name = tool.get("name", "")
@@ -353,10 +400,10 @@ class SecurityScanner:
                     "encoding": self.enable_encoding_scan,
                 },
                 "fail_on_medium": self.fail_on_medium,
-            }
+            },
         )
 
-    def _scan_text(self, text: str, location: str) -> List[SecurityThreat]:
+    def _scan_text(self, text: str, location: str) -> list[SecurityThreat]:
         """Scan a text string for threats."""
         threats = []
 
@@ -366,21 +413,23 @@ class SecurityScanner:
         for threat_pattern in self._compiled_patterns:
             match = threat_pattern.pattern.search(text)
             if match:
-                threats.append(SecurityThreat(
-                    category=threat_pattern.category,
-                    severity=threat_pattern.severity,
-                    title=threat_pattern.title,
-                    description=threat_pattern.description,
-                    location=location,
-                    matched_content=match.group(0)[:100],  # Limit matched content
-                    mitigation=threat_pattern.mitigation,
-                    cwe_id=threat_pattern.cwe_id,
-                    owasp_id=threat_pattern.owasp_id,
-                ))
+                threats.append(
+                    SecurityThreat(
+                        category=threat_pattern.category,
+                        severity=threat_pattern.severity,
+                        title=threat_pattern.title,
+                        description=threat_pattern.description,
+                        location=location,
+                        matched_content=match.group(0)[:100],  # Limit matched content
+                        mitigation=threat_pattern.mitigation,
+                        cwe_id=threat_pattern.cwe_id,
+                        owasp_id=threat_pattern.owasp_id,
+                    )
+                )
 
         return threats
 
-    def _scan_tool_poisoning(self, description: str, location: str) -> List[SecurityThreat]:
+    def _scan_tool_poisoning(self, description: str, location: str) -> list[SecurityThreat]:
         """
         Advanced tool poisoning detection.
 
@@ -394,9 +443,23 @@ class SecurityScanner:
 
         # Check for instruction density
         instruction_words = [
-            "must", "always", "never", "ignore", "forget", "pretend",
-            "override", "bypass", "disable", "execute", "run", "call",
-            "before", "after", "instead", "when", "if",
+            "must",
+            "always",
+            "never",
+            "ignore",
+            "forget",
+            "pretend",
+            "override",
+            "bypass",
+            "disable",
+            "execute",
+            "run",
+            "call",
+            "before",
+            "after",
+            "instead",
+            "when",
+            "if",
         ]
 
         desc_lower = description.lower()
@@ -406,73 +469,81 @@ class SecurityScanner:
         if word_count > 0:
             instruction_density = instruction_count / word_count
             if instruction_density > 0.15:  # More than 15% instruction words
-                threats.append(SecurityThreat(
-                    category=ThreatCategory.TOOL_POISONING,
-                    severity=ThreatSeverity.MEDIUM,
-                    title="High instruction density",
-                    description=f"Description has unusually high density of instruction words ({instruction_density:.1%})",
-                    location=location,
-                    mitigation="Review description for hidden behavioral instructions",
-                ))
+                threats.append(
+                    SecurityThreat(
+                        category=ThreatCategory.TOOL_POISONING,
+                        severity=ThreatSeverity.MEDIUM,
+                        title="High instruction density",
+                        description=f"Description has unusually high density of instruction words ({instruction_density:.1%})",
+                        location=location,
+                        mitigation="Review description for hidden behavioral instructions",
+                    )
+                )
 
         # Check for hidden unicode characters
         invisible_chars = [
-            '\u200b',  # Zero-width space
-            '\u200c',  # Zero-width non-joiner
-            '\u200d',  # Zero-width joiner
-            '\ufeff',  # BOM
-            '\u2060',  # Word joiner
-            '\u00ad',  # Soft hyphen
+            "\u200b",  # Zero-width space
+            "\u200c",  # Zero-width non-joiner
+            "\u200d",  # Zero-width joiner
+            "\ufeff",  # BOM
+            "\u2060",  # Word joiner
+            "\u00ad",  # Soft hyphen
         ]
 
         for char in invisible_chars:
             if char in description:
-                threats.append(SecurityThreat(
-                    category=ThreatCategory.TOOL_POISONING,
-                    severity=ThreatSeverity.HIGH,
-                    title="Hidden unicode characters",
-                    description=f"Description contains invisible unicode character (U+{ord(char):04X})",
-                    location=location,
-                    matched_content=f"U+{ord(char):04X}",
-                    mitigation="Remove invisible characters that may hide malicious content",
-                ))
+                threats.append(
+                    SecurityThreat(
+                        category=ThreatCategory.TOOL_POISONING,
+                        severity=ThreatSeverity.HIGH,
+                        title="Hidden unicode characters",
+                        description=f"Description contains invisible unicode character (U+{ord(char):04X})",
+                        location=location,
+                        matched_content=f"U+{ord(char):04X}",
+                        mitigation="Remove invisible characters that may hide malicious content",
+                    )
+                )
 
         # Check for homoglyph attacks
         homoglyphs = {
-            'а': 'a',  # Cyrillic
-            'е': 'e',
-            'о': 'o',
-            'р': 'p',
-            'с': 'c',
-            'х': 'x',
+            "а": "a",  # Cyrillic
+            "е": "e",
+            "о": "o",
+            "р": "p",
+            "с": "c",
+            "х": "x",
         }
 
         for homoglyph, latin in homoglyphs.items():
             if homoglyph in description:
-                threats.append(SecurityThreat(
-                    category=ThreatCategory.TOOL_POISONING,
-                    severity=ThreatSeverity.MEDIUM,
-                    title="Homoglyph character detected",
-                    description=f"Non-Latin character resembling '{latin}' detected (may be deceptive)",
-                    location=location,
-                    mitigation="Use only ASCII characters in descriptions",
-                ))
+                threats.append(
+                    SecurityThreat(
+                        category=ThreatCategory.TOOL_POISONING,
+                        severity=ThreatSeverity.MEDIUM,
+                        title="Homoglyph character detected",
+                        description=f"Non-Latin character resembling '{latin}' detected (may be deceptive)",
+                        location=location,
+                        mitigation="Use only ASCII characters in descriptions",
+                    )
+                )
                 break  # Only report once
 
         # Check for excessive length (could hide instructions)
         if len(description) > 2000:
-            threats.append(SecurityThreat(
-                category=ThreatCategory.TOOL_POISONING,
-                severity=ThreatSeverity.LOW,
-                title="Excessively long description",
-                description=f"Description is {len(description)} characters (may hide instructions)",
-                location=location,
-                mitigation="Keep descriptions concise and focused",
-            ))
+            threats.append(
+                SecurityThreat(
+                    category=ThreatCategory.TOOL_POISONING,
+                    severity=ThreatSeverity.LOW,
+                    title="Excessively long description",
+                    description=f"Description is {len(description)} characters (may hide instructions)",
+                    location=location,
+                    mitigation="Keep descriptions concise and focused",
+                )
+            )
 
         return threats
 
-    def _scan_schema(self, schema: Dict[str, Any], location: str) -> List[SecurityThreat]:
+    def _scan_schema(self, schema: dict[str, Any], location: str) -> list[SecurityThreat]:
         """Scan an input schema for threats."""
         threats = []
 
@@ -510,7 +581,7 @@ class SecurityScanner:
 
         return threats
 
-    def _scan_dict(self, data: Dict[str, Any], location: str) -> List[SecurityThreat]:
+    def _scan_dict(self, data: dict[str, Any], location: str) -> list[SecurityThreat]:
         """Recursively scan a dictionary for threats."""
         threats = []
 
@@ -533,11 +604,11 @@ class SecurityScanner:
 
         return threats
 
-    def _scan_encoded_content(self, tool: Dict[str, Any]) -> List[SecurityThreat]:
+    def _scan_encoded_content(self, tool: dict[str, Any]) -> list[SecurityThreat]:
         """Detect and scan encoded content that might hide threats."""
         threats = []
 
-        def extract_strings(obj: Any) -> List[Tuple[str, str]]:
+        def extract_strings(obj: Any) -> list[tuple[str, str]]:
             """Extract all strings with their paths."""
             strings = []
             if isinstance(obj, str):
@@ -557,47 +628,55 @@ class SecurityScanner:
                 continue
 
             # Check for base64 encoded content
-            if len(content) >= 20 and re.match(r'^[A-Za-z0-9+/]+=*$', content):
+            if len(content) >= 20 and re.match(r"^[A-Za-z0-9+/]+=*$", content):
                 try:
-                    decoded = base64.b64decode(content).decode('utf-8', errors='ignore')
+                    decoded = base64.b64decode(content).decode("utf-8", errors="ignore")
                     if len(decoded) > 10:
                         # Scan decoded content
                         decoded_threats = self._scan_text(decoded, f"{location} (base64 decoded)")
                         if decoded_threats:
-                            threats.append(SecurityThreat(
-                                category=ThreatCategory.TOOL_POISONING,
-                                severity=ThreatSeverity.HIGH,
-                                title="Malicious content in base64 encoding",
-                                description="Detected threats hidden in base64-encoded content",
-                                location=location,
-                                mitigation="Remove or validate all encoded content",
-                            ))
+                            threats.append(
+                                SecurityThreat(
+                                    category=ThreatCategory.TOOL_POISONING,
+                                    severity=ThreatSeverity.HIGH,
+                                    title="Malicious content in base64 encoding",
+                                    description="Detected threats hidden in base64-encoded content",
+                                    location=location,
+                                    mitigation="Remove or validate all encoded content",
+                                )
+                            )
                             threats.extend(decoded_threats)
                 except Exception:
                     pass  # Not valid base64
 
             # Check for hex-encoded content
-            if len(content) >= 20 and re.match(r'^[0-9a-fA-F]+$', content) and len(content) % 2 == 0:
+            if (
+                len(content) >= 20
+                and re.match(r"^[0-9a-fA-F]+$", content)
+                and len(content) % 2 == 0
+            ):
                 try:
-                    decoded = bytes.fromhex(content).decode('utf-8', errors='ignore')
+                    decoded = bytes.fromhex(content).decode("utf-8", errors="ignore")
                     if len(decoded) > 10:
                         decoded_threats = self._scan_text(decoded, f"{location} (hex decoded)")
                         if decoded_threats:
-                            threats.append(SecurityThreat(
-                                category=ThreatCategory.TOOL_POISONING,
-                                severity=ThreatSeverity.HIGH,
-                                title="Malicious content in hex encoding",
-                                description="Detected threats hidden in hex-encoded content",
-                                location=location,
-                                mitigation="Remove or validate all encoded content",
-                            ))
+                            threats.append(
+                                SecurityThreat(
+                                    category=ThreatCategory.TOOL_POISONING,
+                                    severity=ThreatSeverity.HIGH,
+                                    title="Malicious content in hex encoding",
+                                    description="Detected threats hidden in hex-encoded content",
+                                    location=location,
+                                    mitigation="Remove or validate all encoded content",
+                                )
+                            )
                             threats.extend(decoded_threats)
                 except Exception:
                     pass  # Not valid hex
 
         return threats
 
-    def scan_batch(self, tools: List[Dict[str, Any]]) -> Dict[str, SecurityScanResult]:
+    def scan_batch(self, tools: list[dict[str, Any]]) -> dict[str, SecurityScanResult]:
         """
         Scan multiple tools.
 

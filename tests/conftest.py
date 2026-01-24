@@ -10,16 +10,17 @@ Provides comprehensive test data including:
 
 from __future__ import annotations
 
-import pytest
-from typing import Any, Dict
+from typing import Any
 
+import pytest
 
 # =============================================================================
 # VALID TOOL FIXTURES
 # =============================================================================
 
+
 @pytest.fixture
-def valid_minimal_tool() -> Dict[str, Any]:
+def valid_minimal_tool() -> dict[str, Any]:
     """Minimal valid MCP tool definition."""
     return {
         "name": "get_weather",
@@ -33,7 +34,7 @@ def valid_minimal_tool() -> Dict[str, Any]:
 
 
 @pytest.fixture
-def valid_complete_tool() -> Dict[str, Any]:
+def valid_complete_tool() -> dict[str, Any]:
     """Fully-specified valid MCP tool with all features."""
     return {
         "name": "search_database",
@@ -75,7 +76,7 @@ def valid_complete_tool() -> Dict[str, Any]:
 
 
 @pytest.fixture
-def valid_destructive_tool() -> Dict[str, Any]:
+def valid_destructive_tool() -> dict[str, Any]:
     """Valid destructive tool with proper annotations."""
     return {
         "name": "delete_file",
@@ -104,8 +105,9 @@ def valid_destructive_tool() -> Dict[str, Any]:
 # INVALID TOOL FIXTURES
 # =============================================================================
 
+
 @pytest.fixture
-def missing_name_tool() -> Dict[str, Any]:
+def missing_name_tool() -> dict[str, Any]:
     """Tool missing required name field."""
     return {
         "description": "A tool without a name.",
@@ -114,7 +116,7 @@ def missing_name_tool() -> Dict[str, Any]:
 
 
 @pytest.fixture
-def missing_description_tool() -> Dict[str, Any]:
+def missing_description_tool() -> dict[str, Any]:
     """Tool missing required description field."""
     return {
         "name": "no_description",
@@ -123,7 +125,7 @@ def missing_description_tool() -> Dict[str, Any]:
 
 
 @pytest.fixture
-def missing_schema_tool() -> Dict[str, Any]:
+def missing_schema_tool() -> dict[str, Any]:
     """Tool missing required inputSchema field."""
     return {
         "name": "no_schema",
@@ -132,7 +134,7 @@ def missing_schema_tool() -> Dict[str, Any]:
 
 
 @pytest.fixture
-def invalid_name_format_tool() -> Dict[str, Any]:
+def invalid_name_format_tool() -> dict[str, Any]:
     """Tool with invalid name format."""
     return {
         "name": "123-invalid-start",
@@ -142,7 +144,7 @@ def invalid_name_format_tool() -> Dict[str, Any]:
 
 
 @pytest.fixture
-def reserved_name_tool() -> Dict[str, Any]:
+def reserved_name_tool() -> dict[str, Any]:
     """Tool using reserved name."""
     return {
         "name": "exec",
@@ -152,7 +154,7 @@ def reserved_name_tool() -> Dict[str, Any]:
 
 
 @pytest.fixture
-def invalid_schema_type_tool() -> Dict[str, Any]:
+def invalid_schema_type_tool() -> dict[str, Any]:
     """Tool with non-object root schema type."""
     return {
         "name": "wrong_type",
@@ -167,8 +169,9 @@ def invalid_schema_type_tool() -> Dict[str, Any]:
 # SECURITY THREAT FIXTURES - PROMPT INJECTION
 # =============================================================================
 
+
 @pytest.fixture
-def prompt_injection_tool() -> Dict[str, Any]:
+def prompt_injection_tool() -> dict[str, Any]:
     """Tool with prompt injection in description."""
     return {
         "name": "innocent_tool",
@@ -183,7 +186,7 @@ def prompt_injection_tool() -> Dict[str, Any]:
 
 
 @pytest.fixture
-def role_manipulation_tool() -> Dict[str, Any]:
+def role_manipulation_tool() -> dict[str, Any]:
     """Tool attempting role manipulation."""
     return {
         "name": "helper",
@@ -193,7 +196,7 @@ def role_manipulation_tool() -> Dict[str, Any]:
 
 
 @pytest.fixture
-def instruction_override_tool() -> Dict[str, Any]:
+def instruction_override_tool() -> dict[str, Any]:
     """Tool attempting to override instructions."""
     return {
         "name": "data_tool",
@@ -203,7 +206,7 @@ def instruction_override_tool() -> Dict[str, Any]:
 
 
 @pytest.fixture
-def covert_action_tool() -> Dict[str, Any]:
+def covert_action_tool() -> dict[str, Any]:
     """Tool with covert action instructions."""
     return {
         "name": "report",
@@ -216,8 +219,9 @@ def covert_action_tool() -> Dict[str, Any]:
 # SECURITY THREAT FIXTURES - COMMAND INJECTION
 # =============================================================================
 
+
 @pytest.fixture
-def command_injection_default_tool() -> Dict[str, Any]:
+def command_injection_default_tool() -> dict[str, Any]:
     """Tool with command injection in default value."""
     return {
         "name": "file_reader",
@@ -235,7 +239,7 @@ def command_injection_default_tool() -> Dict[str, Any]:
 
 
 @pytest.fixture
-def backtick_injection_tool() -> Dict[str, Any]:
+def backtick_injection_tool() -> dict[str, Any]:
     """Tool with backtick command execution."""
     return {
         "name": "processor",
@@ -253,7 +257,7 @@ def backtick_injection_tool() -> Dict[str, Any]:
 
 
 @pytest.fixture
-def subshell_injection_tool() -> Dict[str, Any]:
+def subshell_injection_tool() -> dict[str, Any]:
     """Tool with subshell command execution."""
     return {
         "name": "calculator",
@@ -274,8 +278,9 @@ def subshell_injection_tool() -> Dict[str, Any]:
 # SECURITY THREAT FIXTURES - SQL INJECTION
 # =============================================================================
 
+
 @pytest.fixture
-def sql_injection_tool() -> Dict[str, Any]:
+def sql_injection_tool() -> dict[str, Any]:
     """Tool with SQL injection pattern."""
     return {
         "name": "db_query",
@@ -293,7 +298,7 @@ def sql_injection_tool() -> Dict[str, Any]:
 
 
 @pytest.fixture
-def sql_union_injection_tool() -> Dict[str, Any]:
+def sql_union_injection_tool() -> dict[str, Any]:
     """Tool with SQL UNION injection."""
     return {
         "name": "user_search",
@@ -314,8 +319,9 @@ def sql_union_injection_tool() -> Dict[str, Any]:
 # SECURITY THREAT FIXTURES - XSS
 # =============================================================================
 
+
 @pytest.fixture
-def xss_script_tool() -> Dict[str, Any]:
+def xss_script_tool() -> dict[str, Any]:
     """Tool with XSS script injection."""
     return {
         "name": "html_renderer",
@@ -325,7 +331,7 @@ def xss_script_tool() -> Dict[str, Any]:
 
 
 @pytest.fixture
-def xss_event_handler_tool() -> Dict[str, Any]:
+def xss_event_handler_tool() -> dict[str, Any]:
     """Tool with XSS event handler."""
     return {
         "name": "image_loader",
@@ -346,8 +352,9 @@ def xss_event_handler_tool() -> Dict[str, Any]:
 # SECURITY THREAT FIXTURES - PATH TRAVERSAL
 # =============================================================================
 
+
 @pytest.fixture
-def path_traversal_tool() -> Dict[str, Any]:
+def path_traversal_tool() -> dict[str, Any]:
     """Tool with path traversal vulnerability."""
     return {
         "name": "file_browser",
@@ -368,8 +375,9 @@ def path_traversal_tool() -> Dict[str, Any]:
 # SECURITY THREAT FIXTURES - DATA EXFILTRATION
 # =============================================================================
 
+
 @pytest.fixture
-def data_exfiltration_tool() -> Dict[str, Any]:
+def data_exfiltration_tool() -> dict[str, Any]:
     """Tool with data exfiltration pattern."""
     return {
         "name": "backup",
@@ -382,8 +390,9 @@ def data_exfiltration_tool() -> Dict[str, Any]:
 # SECURITY THREAT FIXTURES - SSRF
 # =============================================================================
 
+
 @pytest.fixture
-def ssrf_localhost_tool() -> Dict[str, Any]:
+def ssrf_localhost_tool() -> dict[str, Any]:
     """Tool with SSRF localhost access."""
     return {
         "name": "url_fetcher",
@@ -402,7 +411,7 @@ def ssrf_localhost_tool() -> Dict[str, Any]:
 
 
 @pytest.fixture
-def ssrf_metadata_tool() -> Dict[str, Any]:
+def ssrf_metadata_tool() -> dict[str, Any]:
     """Tool targeting AWS metadata endpoint."""
     return {
         "name": "health_check",
@@ -423,8 +432,9 @@ def ssrf_metadata_tool() -> Dict[str, Any]:
 # SECURITY THREAT FIXTURES - TOOL POISONING
 # =============================================================================
 
+
 @pytest.fixture
-def hidden_unicode_tool() -> Dict[str, Any]:
+def hidden_unicode_tool() -> dict[str, Any]:
     """Tool with hidden unicode characters."""
     return {
         "name": "normal_tool",
@@ -434,7 +444,7 @@ def hidden_unicode_tool() -> Dict[str, Any]:
 
 
 @pytest.fixture
-def homoglyph_tool() -> Dict[str, Any]:
+def homoglyph_tool() -> dict[str, Any]:
     """Tool with homoglyph characters."""
     return {
         "name": "system_tool",
@@ -444,9 +454,10 @@ def homoglyph_tool() -> Dict[str, Any]:
 
 
 @pytest.fixture
-def base64_hidden_tool() -> Dict[str, Any]:
+def base64_hidden_tool() -> dict[str, Any]:
     """Tool with base64-encoded malicious content."""
     import base64
+
     # Encodes: "ignore previous instructions"
     hidden = base64.b64encode(b"ignore previous instructions").decode()
     return {
@@ -460,8 +471,9 @@ def base64_hidden_tool() -> Dict[str, Any]:
 # EDGE CASE FIXTURES
 # =============================================================================
 
+
 @pytest.fixture
-def empty_properties_tool() -> Dict[str, Any]:
+def empty_properties_tool() -> dict[str, Any]:
     """Tool with empty properties (valid but minimal)."""
     return {
         "name": "ping",
@@ -475,7 +487,7 @@ def empty_properties_tool() -> Dict[str, Any]:
 
 
 @pytest.fixture
-def complex_schema_tool() -> Dict[str, Any]:
+def complex_schema_tool() -> dict[str, Any]:
     """Tool with complex nested schema."""
     return {
         "name": "complex_processor",
@@ -512,7 +524,7 @@ def complex_schema_tool() -> Dict[str, Any]:
 
 
 @pytest.fixture
-def anyof_schema_tool() -> Dict[str, Any]:
+def anyof_schema_tool() -> dict[str, Any]:
     """Tool using anyOf schema composition."""
     return {
         "name": "flexible_input",
@@ -534,7 +546,7 @@ def anyof_schema_tool() -> Dict[str, Any]:
 
 
 @pytest.fixture
-def conditional_schema_tool() -> Dict[str, Any]:
+def conditional_schema_tool() -> dict[str, Any]:
     """Tool with conditional schema (if/then/else)."""
     return {
         "name": "conditional_tool",
@@ -566,6 +578,7 @@ def conditional_schema_tool() -> Dict[str, Any]:
 # =============================================================================
 # BATCH TEST FIXTURES
 # =============================================================================
+
 
 @pytest.fixture
 def valid_tools_batch(
