@@ -35,9 +35,9 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from .grader import MCPToolGrader, GradeReport, Grade
+from .grader import Grade, GradeReport, MCPToolGrader
 
 
 # ANSI color codes
@@ -106,10 +106,18 @@ def print_report(report: GradeReport, verbose: bool = False) -> None:
     print()
 
     # Status - use ASCII alternatives for Windows compatibility
-    safe_icon = f"{Colors.GREEN}[OK]{Colors.RESET}" if report.is_safe else f"{Colors.RED}[X]{Colors.RESET}"
-    compliant_icon = f"{Colors.GREEN}[OK]{Colors.RESET}" if report.is_compliant else f"{Colors.RED}[X]{Colors.RESET}"
+    safe_icon = (
+        f"{Colors.GREEN}[OK]{Colors.RESET}" if report.is_safe else f"{Colors.RED}[X]{Colors.RESET}"
+    )
+    compliant_icon = (
+        f"{Colors.GREEN}[OK]{Colors.RESET}"
+        if report.is_compliant
+        else f"{Colors.RED}[X]{Colors.RESET}"
+    )
     print(f"  Safe: {safe_icon} {'Yes' if report.is_safe else 'No - Security Issues Found'}")
-    print(f"  Compliant: {compliant_icon} {'Yes' if report.is_compliant else 'No - MCP Spec Violations'}")
+    print(
+        f"  Compliant: {compliant_icon} {'Yes' if report.is_compliant else 'No - MCP Spec Violations'}"
+    )
     print()
 
     # Remarks
@@ -144,7 +152,7 @@ def print_report(report: GradeReport, verbose: bool = False) -> None:
     print()
 
 
-def print_summary_table(reports: Dict[str, GradeReport]) -> None:
+def print_summary_table(reports: dict[str, GradeReport]) -> None:
     """Print a summary table for multiple tools."""
     print()
     print(f"{Colors.BOLD}Summary{Colors.RESET}")
@@ -156,7 +164,11 @@ def print_summary_table(reports: Dict[str, GradeReport]) -> None:
 
     # Rows
     for name, report in sorted(reports.items(), key=lambda x: -x[1].score):
-        status = f"{Colors.GREEN}Safe{Colors.RESET}" if report.is_safe else f"{Colors.RED}Unsafe{Colors.RESET}"
+        status = (
+            f"{Colors.GREEN}Safe{Colors.RESET}"
+            if report.is_safe
+            else f"{Colors.RED}Unsafe{Colors.RESET}"
+        )
         print(
             f"  {name[:40]:<40} "
             f"{colorize_score(report.score):>7} "
@@ -179,7 +191,7 @@ def print_summary_table(reports: Dict[str, GradeReport]) -> None:
     print()
 
 
-def load_tool(path: str) -> Dict[str, Any]:
+def load_tool(path: str) -> dict[str, Any]:
     """Load a tool definition from a file or stdin."""
     if path == "-":
         return json.load(sys.stdin)
@@ -192,7 +204,7 @@ def load_tool(path: str) -> Dict[str, Any]:
         return json.load(f)
 
 
-def main(args: Optional[List[str]] = None) -> int:
+def main(args: list[str] | None = None) -> int:
     """Main entry point."""
     parser = argparse.ArgumentParser(
         prog="tool-scan",
@@ -220,19 +232,22 @@ Exit codes:
     )
 
     parser.add_argument(
-        "-j", "--json",
+        "-j",
+        "--json",
         action="store_true",
         help="Output results as JSON",
     )
 
     parser.add_argument(
-        "-s", "--strict",
+        "-s",
+        "--strict",
         action="store_true",
         help="Strict mode: fail on any security issues",
     )
 
     parser.add_argument(
-        "-v", "--verbose",
+        "-v",
+        "--verbose",
         action="store_true",
         help="Show all remarks and details",
     )
@@ -270,8 +285,8 @@ Exit codes:
     )
 
     # Load and grade tools
-    reports: Dict[str, GradeReport] = {}
-    errors: List[str] = []
+    reports: dict[str, GradeReport] = {}
+    errors: list[str] = []
 
     for file_path in parsed.files:
         try:
@@ -306,9 +321,15 @@ Exit codes:
             "results": {name: report.json_report for name, report in reports.items()},
             "summary": {
                 "total": len(reports),
-                "passed": sum(1 for r in reports.values() if r.score >= parsed.min_score and r.is_safe),
-                "failed": sum(1 for r in reports.values() if r.score < parsed.min_score or not r.is_safe),
-                "average_score": sum(r.score for r in reports.values()) / len(reports) if reports else 0,
+                "passed": sum(
+                    1 for r in reports.values() if r.score >= parsed.min_score and r.is_safe
+                ),
+                "failed": sum(
+                    1 for r in reports.values() if r.score < parsed.min_score or not r.is_safe
+                ),
+                "average_score": sum(r.score for r in reports.values()) / len(reports)
+                if reports
+                else 0,
             },
             "errors": errors,
         }
@@ -324,8 +345,7 @@ Exit codes:
 
     # Determine exit code
     failed = any(
-        r.score < parsed.min_score or (parsed.strict and not r.is_safe)
-        for r in reports.values()
+        r.score < parsed.min_score or (parsed.strict and not r.is_safe) for r in reports.values()
     )
 
     return 1 if failed or errors else 0

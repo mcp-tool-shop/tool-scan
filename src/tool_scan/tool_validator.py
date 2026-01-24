@@ -17,18 +17,19 @@ Key validation areas:
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import Any, Callable, Dict, List, Optional, Set, TypedDict
+from typing import Any, TypedDict
 
 
 class ValidationSeverity(Enum):
     """Severity levels for validation issues."""
 
-    INFO = auto()       # Informational, best practice suggestions
-    WARNING = auto()    # Non-blocking issues that should be addressed
-    ERROR = auto()      # Blocking issues that fail validation
-    CRITICAL = auto()   # Security vulnerabilities that must be fixed
+    INFO = auto()  # Informational, best practice suggestions
+    WARNING = auto()  # Non-blocking issues that should be addressed
+    ERROR = auto()  # Blocking issues that fail validation
+    CRITICAL = auto()  # Security vulnerabilities that must be fixed
 
 
 @dataclass
@@ -38,9 +39,9 @@ class ValidationIssue:
     code: str
     message: str
     severity: ValidationSeverity
-    field: Optional[str] = None
-    suggestion: Optional[str] = None
-    reference: Optional[str] = None  # Link to spec or docs
+    field: str | None = None
+    suggestion: str | None = None
+    reference: str | None = None  # Link to spec or docs
 
     def __str__(self) -> str:
         prefix = f"[{self.severity.name}]"
@@ -54,20 +55,24 @@ class ValidationResult:
 
     tool_name: str
     is_valid: bool
-    issues: List[ValidationIssue] = field(default_factory=list)
+    issues: list[ValidationIssue] = field(default_factory=list)
     score: float = 100.0  # 0-100 quality score
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     @property
-    def errors(self) -> List[ValidationIssue]:
-        return [i for i in self.issues if i.severity in (ValidationSeverity.ERROR, ValidationSeverity.CRITICAL)]
+    def errors(self) -> list[ValidationIssue]:
+        return [
+            i
+            for i in self.issues
+            if i.severity in (ValidationSeverity.ERROR, ValidationSeverity.CRITICAL)
+        ]
 
     @property
-    def warnings(self) -> List[ValidationIssue]:
+    def warnings(self) -> list[ValidationIssue]:
         return [i for i in self.issues if i.severity == ValidationSeverity.WARNING]
 
     @property
-    def critical_issues(self) -> List[ValidationIssue]:
+    def critical_issues(self) -> list[ValidationIssue]:
         return [i for i in self.issues if i.severity == ValidationSeverity.CRITICAL]
 
     def summary(self) -> str:
@@ -87,8 +92,8 @@ class MCPToolDefinition(TypedDict, total=False):
 
     name: str
     description: str
-    inputSchema: Dict[str, Any]
-    annotations: Dict[str, Any]
+    inputSchema: dict[str, Any]
+    annotations: dict[str, Any]
 
 
 class MCPToolValidator:
@@ -116,15 +121,31 @@ class MCPToolValidator:
     MIN_DESCRIPTION_LENGTH = 10
 
     # Reserved/dangerous tool names
-    RESERVED_NAMES: Set[str] = {
-        "system", "admin", "root", "sudo", "exec", "eval", "shell",
-        "rm", "delete", "drop", "truncate", "format", "shutdown",
-        "__init__", "__call__", "__exec__",
+    RESERVED_NAMES: set[str] = {
+        "system",
+        "admin",
+        "root",
+        "sudo",
+        "exec",
+        "eval",
+        "shell",
+        "rm",
+        "delete",
+        "drop",
+        "truncate",
+        "format",
+        "shutdown",
+        "__init__",
+        "__call__",
+        "__exec__",
     }
 
     # Dangerous patterns in descriptions (tool poisoning indicators)
     DANGEROUS_DESCRIPTION_PATTERNS = [
-        (r"ignore\s+(all\s+)?(previous|prior|above)\s+(instructions?|rules?|constraints?)", "instruction_override"),
+        (
+            r"ignore\s+(all\s+)?(previous|prior|above)\s+(instructions?|rules?|constraints?)",
+            "instruction_override",
+        ),
         (r"you\s+(must|should|have\s+to)\s+always", "forced_behavior"),
         (r"never\s+tell\s+(the\s+)?user", "deception_attempt"),
         (r"pretend\s+(to\s+be|you\s+are)", "identity_manipulation"),
@@ -142,7 +163,7 @@ class MCPToolValidator:
         strict_mode: bool = True,
         check_security: bool = True,
         check_schema: bool = True,
-        custom_validators: Optional[List[Callable[[MCPToolDefinition], List[ValidationIssue]]]] = None,
+        custom_validators: list[Callable[[MCPToolDefinition], list[ValidationIssue]]] | None = None,
     ):
         """
         Initialize the validator.
@@ -174,7 +195,7 @@ class MCPToolValidator:
         Returns:
             ValidationResult with all issues found
         """
-        issues: List[ValidationIssue] = []
+        issues: list[ValidationIssue] = []
         tool_name = tool.get("name", "<unnamed>")
 
         # Core validation
@@ -192,19 +213,20 @@ class MCPToolValidator:
             try:
                 issues.extend(validator(tool))
             except Exception as e:
-                issues.append(ValidationIssue(
-                    code="CUSTOM_VALIDATOR_ERROR",
-                    message=f"Custom validator failed: {e}",
-                    severity=ValidationSeverity.WARNING,
-                ))
+                issues.append(
+                    ValidationIssue(
+                        code="CUSTOM_VALIDATOR_ERROR",
+                        message=f"Custom validator failed: {e}",
+                        severity=ValidationSeverity.WARNING,
+                    )
+                )
 
         # Calculate score
         score = self._calculate_score(issues)
 
         # Determine validity
         has_errors = any(
-            i.severity in (ValidationSeverity.ERROR, ValidationSeverity.CRITICAL)
-            for i in issues
+            i.severity in (ValidationSeverity.ERROR, ValidationSeverity.CRITICAL) for i in issues
         )
         has_warnings = any(i.severity == ValidationSeverity.WARNING for i in issues)
 
@@ -219,146 +241,170 @@ class MCPToolValidator:
                 "strict_mode": self.strict_mode,
                 "security_checked": self.check_security,
                 "schema_checked": self.check_schema,
-            }
+            },
         )
 
-    def _validate_name(self, tool: MCPToolDefinition) -> List[ValidationIssue]:
+    def _validate_name(self, tool: MCPToolDefinition) -> list[ValidationIssue]:
         """Validate tool name requirements."""
         issues = []
         name = tool.get("name")
 
         # Name is required
         if not name:
-            issues.append(ValidationIssue(
-                code="NAME_MISSING",
-                message="Tool name is required",
-                severity=ValidationSeverity.ERROR,
-                field="name",
-                reference="https://modelcontextprotocol.io/specification/2025-11-25",
-            ))
+            issues.append(
+                ValidationIssue(
+                    code="NAME_MISSING",
+                    message="Tool name is required",
+                    severity=ValidationSeverity.ERROR,
+                    field="name",
+                    reference="https://modelcontextprotocol.io/specification/2025-11-25",
+                )
+            )
             return issues
 
         # Name format validation
         if not self.VALID_NAME_PATTERN.match(name):
-            issues.append(ValidationIssue(
-                code="NAME_INVALID_FORMAT",
-                message=f"Name '{name}' must start with letter/underscore, contain only alphanumeric, underscore, hyphen",
-                severity=ValidationSeverity.ERROR,
-                field="name",
-                suggestion="Use snake_case or kebab-case naming",
-            ))
+            issues.append(
+                ValidationIssue(
+                    code="NAME_INVALID_FORMAT",
+                    message=f"Name '{name}' must start with letter/underscore, contain only alphanumeric, underscore, hyphen",
+                    severity=ValidationSeverity.ERROR,
+                    field="name",
+                    suggestion="Use snake_case or kebab-case naming",
+                )
+            )
 
         # Name length
         if len(name) > self.MAX_NAME_LENGTH:
-            issues.append(ValidationIssue(
-                code="NAME_TOO_LONG",
-                message=f"Name exceeds {self.MAX_NAME_LENGTH} characters",
-                severity=ValidationSeverity.ERROR,
-                field="name",
-            ))
+            issues.append(
+                ValidationIssue(
+                    code="NAME_TOO_LONG",
+                    message=f"Name exceeds {self.MAX_NAME_LENGTH} characters",
+                    severity=ValidationSeverity.ERROR,
+                    field="name",
+                )
+            )
 
         # Reserved names check
         if name.lower() in self.RESERVED_NAMES:
-            issues.append(ValidationIssue(
-                code="NAME_RESERVED",
-                message=f"Name '{name}' is reserved and cannot be used",
-                severity=ValidationSeverity.CRITICAL,
-                field="name",
-                suggestion="Choose a more specific, descriptive name",
-            ))
+            issues.append(
+                ValidationIssue(
+                    code="NAME_RESERVED",
+                    message=f"Name '{name}' is reserved and cannot be used",
+                    severity=ValidationSeverity.CRITICAL,
+                    field="name",
+                    suggestion="Choose a more specific, descriptive name",
+                )
+            )
 
         # Naming conventions (warnings)
         if name.startswith("_"):
-            issues.append(ValidationIssue(
-                code="NAME_UNDERSCORE_PREFIX",
-                message="Names starting with underscore suggest internal/private tools",
-                severity=ValidationSeverity.WARNING,
-                field="name",
-            ))
+            issues.append(
+                ValidationIssue(
+                    code="NAME_UNDERSCORE_PREFIX",
+                    message="Names starting with underscore suggest internal/private tools",
+                    severity=ValidationSeverity.WARNING,
+                    field="name",
+                )
+            )
 
         return issues
 
-    def _validate_description(self, tool: MCPToolDefinition) -> List[ValidationIssue]:
+    def _validate_description(self, tool: MCPToolDefinition) -> list[ValidationIssue]:
         """Validate tool description requirements."""
         issues = []
         description = tool.get("description")
 
         # Description is required
         if not description:
-            issues.append(ValidationIssue(
-                code="DESCRIPTION_MISSING",
-                message="Tool description is required",
-                severity=ValidationSeverity.ERROR,
-                field="description",
-                reference="https://modelcontextprotocol.io/specification/2025-11-25",
-            ))
+            issues.append(
+                ValidationIssue(
+                    code="DESCRIPTION_MISSING",
+                    message="Tool description is required",
+                    severity=ValidationSeverity.ERROR,
+                    field="description",
+                    reference="https://modelcontextprotocol.io/specification/2025-11-25",
+                )
+            )
             return issues
 
         # Description length
         if len(description) < self.MIN_DESCRIPTION_LENGTH:
-            issues.append(ValidationIssue(
-                code="DESCRIPTION_TOO_SHORT",
-                message=f"Description should be at least {self.MIN_DESCRIPTION_LENGTH} characters",
-                severity=ValidationSeverity.WARNING,
-                field="description",
-                suggestion="Provide a clear, helpful description of what the tool does",
-            ))
+            issues.append(
+                ValidationIssue(
+                    code="DESCRIPTION_TOO_SHORT",
+                    message=f"Description should be at least {self.MIN_DESCRIPTION_LENGTH} characters",
+                    severity=ValidationSeverity.WARNING,
+                    field="description",
+                    suggestion="Provide a clear, helpful description of what the tool does",
+                )
+            )
 
         if len(description) > self.MAX_DESCRIPTION_LENGTH:
-            issues.append(ValidationIssue(
-                code="DESCRIPTION_TOO_LONG",
-                message=f"Description exceeds {self.MAX_DESCRIPTION_LENGTH} characters",
-                severity=ValidationSeverity.ERROR,
-                field="description",
-            ))
+            issues.append(
+                ValidationIssue(
+                    code="DESCRIPTION_TOO_LONG",
+                    message=f"Description exceeds {self.MAX_DESCRIPTION_LENGTH} characters",
+                    severity=ValidationSeverity.ERROR,
+                    field="description",
+                )
+            )
 
         # Check for tool poisoning patterns
         for pattern, pattern_name in self._dangerous_patterns:
             if pattern.search(description):
-                issues.append(ValidationIssue(
-                    code=f"DESCRIPTION_DANGEROUS_{pattern_name.upper()}",
-                    message=f"Description contains suspicious pattern: {pattern_name}",
-                    severity=ValidationSeverity.CRITICAL,
-                    field="description",
-                    suggestion="Remove any instructions that attempt to manipulate AI behavior",
-                    reference="https://www.practical-devsecops.com/mcp-security-vulnerabilities/",
-                ))
+                issues.append(
+                    ValidationIssue(
+                        code=f"DESCRIPTION_DANGEROUS_{pattern_name.upper()}",
+                        message=f"Description contains suspicious pattern: {pattern_name}",
+                        severity=ValidationSeverity.CRITICAL,
+                        field="description",
+                        suggestion="Remove any instructions that attempt to manipulate AI behavior",
+                        reference="https://www.practical-devsecops.com/mcp-security-vulnerabilities/",
+                    )
+                )
 
         return issues
 
-    def _validate_input_schema(self, tool: MCPToolDefinition) -> List[ValidationIssue]:
+    def _validate_input_schema(self, tool: MCPToolDefinition) -> list[ValidationIssue]:
         """Validate the inputSchema according to JSON Schema standards."""
         issues = []
         schema = tool.get("inputSchema")
 
         # inputSchema is required per MCP spec
         if schema is None:
-            issues.append(ValidationIssue(
-                code="INPUT_SCHEMA_MISSING",
-                message="inputSchema is required for tool definitions",
-                severity=ValidationSeverity.ERROR,
-                field="inputSchema",
-            ))
+            issues.append(
+                ValidationIssue(
+                    code="INPUT_SCHEMA_MISSING",
+                    message="inputSchema is required for tool definitions",
+                    severity=ValidationSeverity.ERROR,
+                    field="inputSchema",
+                )
+            )
             return issues
 
         if not isinstance(schema, dict):
-            issues.append(ValidationIssue(
-                code="INPUT_SCHEMA_INVALID_TYPE",
-                message="inputSchema must be an object",
-                severity=ValidationSeverity.ERROR,
-                field="inputSchema",
-            ))
+            issues.append(
+                ValidationIssue(
+                    code="INPUT_SCHEMA_INVALID_TYPE",
+                    message="inputSchema must be an object",
+                    severity=ValidationSeverity.ERROR,
+                    field="inputSchema",
+                )
+            )
             return issues
 
         # Must have type: "object" at root
         if schema.get("type") != "object":
-            issues.append(ValidationIssue(
-                code="INPUT_SCHEMA_NOT_OBJECT",
-                message="inputSchema root type must be 'object'",
-                severity=ValidationSeverity.ERROR,
-                field="inputSchema.type",
-                reference="https://modelcontextprotocol.io/specification/2025-11-25",
-            ))
+            issues.append(
+                ValidationIssue(
+                    code="INPUT_SCHEMA_NOT_OBJECT",
+                    message="inputSchema root type must be 'object'",
+                    severity=ValidationSeverity.ERROR,
+                    field="inputSchema.type",
+                    reference="https://modelcontextprotocol.io/specification/2025-11-25",
+                )
+            )
 
         # Check $schema declaration
         schema_version = schema.get("$schema", "")
@@ -368,23 +414,27 @@ class MCPToolValidator:
             "http://json-schema.org/draft-07/schema",
         ]
         if schema_version and schema_version not in valid_schemas:
-            issues.append(ValidationIssue(
-                code="INPUT_SCHEMA_VERSION_UNKNOWN",
-                message=f"Unknown schema version: {schema_version}",
-                severity=ValidationSeverity.WARNING,
-                field="inputSchema.$schema",
-                suggestion="Use draft-07 or 2020-12 JSON Schema",
-            ))
+            issues.append(
+                ValidationIssue(
+                    code="INPUT_SCHEMA_VERSION_UNKNOWN",
+                    message=f"Unknown schema version: {schema_version}",
+                    severity=ValidationSeverity.WARNING,
+                    field="inputSchema.$schema",
+                    suggestion="Use draft-07 or 2020-12 JSON Schema",
+                )
+            )
 
         # Validate properties
         properties = schema.get("properties", {})
         if not isinstance(properties, dict):
-            issues.append(ValidationIssue(
-                code="INPUT_SCHEMA_PROPERTIES_INVALID",
-                message="properties must be an object",
-                severity=ValidationSeverity.ERROR,
-                field="inputSchema.properties",
-            ))
+            issues.append(
+                ValidationIssue(
+                    code="INPUT_SCHEMA_PROPERTIES_INVALID",
+                    message="properties must be an object",
+                    severity=ValidationSeverity.ERROR,
+                    field="inputSchema.properties",
+                )
+            )
         else:
             # Check each property
             for prop_name, prop_schema in properties.items():
@@ -393,78 +443,92 @@ class MCPToolValidator:
         # Check required array
         required = schema.get("required", [])
         if required and not isinstance(required, list):
-            issues.append(ValidationIssue(
-                code="INPUT_SCHEMA_REQUIRED_INVALID",
-                message="required must be an array",
-                severity=ValidationSeverity.ERROR,
-                field="inputSchema.required",
-            ))
+            issues.append(
+                ValidationIssue(
+                    code="INPUT_SCHEMA_REQUIRED_INVALID",
+                    message="required must be an array",
+                    severity=ValidationSeverity.ERROR,
+                    field="inputSchema.required",
+                )
+            )
         elif required:
             # Verify required properties exist
             for req_prop in required:
                 if req_prop not in properties:
-                    issues.append(ValidationIssue(
-                        code="INPUT_SCHEMA_REQUIRED_MISSING",
-                        message=f"Required property '{req_prop}' not defined in properties",
-                        severity=ValidationSeverity.ERROR,
-                        field="inputSchema.required",
-                    ))
+                    issues.append(
+                        ValidationIssue(
+                            code="INPUT_SCHEMA_REQUIRED_MISSING",
+                            message=f"Required property '{req_prop}' not defined in properties",
+                            severity=ValidationSeverity.ERROR,
+                            field="inputSchema.required",
+                        )
+                    )
 
         # Check additionalProperties (security best practice: should be false)
         additional_props = schema.get("additionalProperties", True)
         if additional_props is True:
-            issues.append(ValidationIssue(
-                code="INPUT_SCHEMA_ADDITIONAL_PROPS",
-                message="additionalProperties should be false for security",
-                severity=ValidationSeverity.WARNING,
-                field="inputSchema.additionalProperties",
-                suggestion="Set additionalProperties: false to prevent unexpected inputs",
-            ))
+            issues.append(
+                ValidationIssue(
+                    code="INPUT_SCHEMA_ADDITIONAL_PROPS",
+                    message="additionalProperties should be false for security",
+                    severity=ValidationSeverity.WARNING,
+                    field="inputSchema.additionalProperties",
+                    suggestion="Set additionalProperties: false to prevent unexpected inputs",
+                )
+            )
 
         return issues
 
-    def _validate_property(self, name: str, schema: Any) -> List[ValidationIssue]:
+    def _validate_property(self, name: str, schema: Any) -> list[ValidationIssue]:
         """Validate a single property in the input schema."""
         issues = []
         field_path = f"inputSchema.properties.{name}"
 
         if not isinstance(schema, dict):
-            issues.append(ValidationIssue(
-                code="PROPERTY_INVALID_TYPE",
-                message=f"Property '{name}' schema must be an object",
-                severity=ValidationSeverity.ERROR,
-                field=field_path,
-            ))
+            issues.append(
+                ValidationIssue(
+                    code="PROPERTY_INVALID_TYPE",
+                    message=f"Property '{name}' schema must be an object",
+                    severity=ValidationSeverity.ERROR,
+                    field=field_path,
+                )
+            )
             return issues
 
         # Type is recommended
         if "type" not in schema and "anyOf" not in schema and "oneOf" not in schema:
-            issues.append(ValidationIssue(
-                code="PROPERTY_NO_TYPE",
-                message=f"Property '{name}' should have a type defined",
-                severity=ValidationSeverity.WARNING,
-                field=field_path,
-            ))
+            issues.append(
+                ValidationIssue(
+                    code="PROPERTY_NO_TYPE",
+                    message=f"Property '{name}' should have a type defined",
+                    severity=ValidationSeverity.WARNING,
+                    field=field_path,
+                )
+            )
 
         # Description is recommended for each property
         if "description" not in schema:
-            issues.append(ValidationIssue(
-                code="PROPERTY_NO_DESCRIPTION",
-                message=f"Property '{name}' should have a description",
-                severity=ValidationSeverity.INFO,
-                field=field_path,
-            ))
+            issues.append(
+                ValidationIssue(
+                    code="PROPERTY_NO_DESCRIPTION",
+                    message=f"Property '{name}' should have a description",
+                    severity=ValidationSeverity.INFO,
+                    field=field_path,
+                )
+            )
 
         # Check for security-sensitive property names
         sensitive_patterns = ["password", "secret", "token", "key", "credential", "auth"]
         if any(p in name.lower() for p in sensitive_patterns):
-            issues.append(ValidationIssue(
-                code="PROPERTY_SENSITIVE_NAME",
-                message=f"Property '{name}' appears to handle sensitive data",
-                severity=ValidationSeverity.WARNING,
-                field=field_path,
-                suggestion="Ensure proper handling and never log sensitive values",
-            ))
+            issues.append(
+                ValidationIssue(
+                    code="PROPERTY_SENSITIVE_NAME",
+                    message=f"Property '{name}' appears to handle sensitive data",
+                    severity=ValidationSeverity.WARNING,
+                    field=field_path,
+                    suggestion="Ensure proper handling and never log sensitive values",
+                )
+            )
 
         # Validate string constraints
         prop_type = schema.get("type")
@@ -472,39 +536,45 @@ class MCPToolValidator:
             # Check for pattern/format for strings
             if "pattern" not in schema and "format" not in schema and "enum" not in schema:
                 if "maxLength" not in schema:
-                    issues.append(ValidationIssue(
-                        code="STRING_NO_CONSTRAINTS",
-                        message=f"String property '{name}' has no validation constraints",
-                        severity=ValidationSeverity.INFO,
-                        field=field_path,
-                        suggestion="Consider adding maxLength, pattern, or format",
-                    ))
+                    issues.append(
+                        ValidationIssue(
+                            code="STRING_NO_CONSTRAINTS",
+                            message=f"String property '{name}' has no validation constraints",
+                            severity=ValidationSeverity.INFO,
+                            field=field_path,
+                            suggestion="Consider adding maxLength, pattern, or format",
+                        )
+                    )
 
         return issues
 
-    def _validate_annotations(self, tool: MCPToolDefinition) -> List[ValidationIssue]:
+    def _validate_annotations(self, tool: MCPToolDefinition) -> list[ValidationIssue]:
         """Validate tool annotations (MCP 2025-11-25 spec)."""
         issues = []
         annotations = tool.get("annotations")
 
         if annotations is None:
             # Annotations are optional but recommended
-            issues.append(ValidationIssue(
-                code="ANNOTATIONS_MISSING",
-                message="Tool annotations are recommended for safety classification",
-                severity=ValidationSeverity.INFO,
-                field="annotations",
-                suggestion="Add annotations to indicate tool behavior (destructive, idempotent, etc.)",
-            ))
+            issues.append(
+                ValidationIssue(
+                    code="ANNOTATIONS_MISSING",
+                    message="Tool annotations are recommended for safety classification",
+                    severity=ValidationSeverity.INFO,
+                    field="annotations",
+                    suggestion="Add annotations to indicate tool behavior (destructive, idempotent, etc.)",
+                )
+            )
             return issues
 
         if not isinstance(annotations, dict):
-            issues.append(ValidationIssue(
-                code="ANNOTATIONS_INVALID_TYPE",
-                message="annotations must be an object",
-                severity=ValidationSeverity.ERROR,
-                field="annotations",
-            ))
+            issues.append(
+                ValidationIssue(
+                    code="ANNOTATIONS_INVALID_TYPE",
+                    message="annotations must be an object",
+                    severity=ValidationSeverity.ERROR,
+                    field="annotations",
+                )
+            )
             return issues
 
         # Known annotation fields per MCP spec
@@ -520,26 +590,30 @@ class MCPToolValidator:
             if key in known_annotations:
                 expected_type = known_annotations[key]
                 if not isinstance(value, expected_type):
-                    issues.append(ValidationIssue(
-                        code="ANNOTATION_WRONG_TYPE",
-                        message=f"Annotation '{key}' should be {expected_type.__name__}",
-                        severity=ValidationSeverity.ERROR,
-                        field=f"annotations.{key}",
-                    ))
+                    issues.append(
+                        ValidationIssue(
+                            code="ANNOTATION_WRONG_TYPE",
+                            message=f"Annotation '{key}' should be {expected_type.__name__}",
+                            severity=ValidationSeverity.ERROR,
+                            field=f"annotations.{key}",
+                        )
+                    )
 
         # Warn about destructive tools
         if annotations.get("destructiveHint") is True:
-            issues.append(ValidationIssue(
-                code="ANNOTATION_DESTRUCTIVE",
-                message="Tool is marked as destructive - ensure proper user consent",
-                severity=ValidationSeverity.WARNING,
-                field="annotations.destructiveHint",
-                suggestion="Destructive tools require explicit user confirmation before execution",
-            ))
+            issues.append(
+                ValidationIssue(
+                    code="ANNOTATION_DESTRUCTIVE",
+                    message="Tool is marked as destructive - ensure proper user consent",
+                    severity=ValidationSeverity.WARNING,
+                    field="annotations.destructiveHint",
+                    suggestion="Destructive tools require explicit user confirmation before execution",
+                )
+            )
 
         return issues
 
-    def _scan_security(self, tool: MCPToolDefinition) -> List[ValidationIssue]:
+    def _scan_security(self, tool: MCPToolDefinition) -> list[ValidationIssue]:
         """Scan for security vulnerabilities."""
         issues = []
 
@@ -566,13 +640,15 @@ class MCPToolValidator:
             if isinstance(default, str):
                 for pattern, vuln_name in dangerous_default_patterns:
                     if re.search(pattern, default):
-                        issues.append(ValidationIssue(
-                            code=f"SECURITY_{vuln_name.upper()}",
-                            message=f"Property '{prop_name}' default contains potential {vuln_name}",
-                            severity=ValidationSeverity.CRITICAL,
-                            field=f"inputSchema.properties.{prop_name}.default",
-                            suggestion="Remove shell metacharacters from default values",
-                        ))
+                        issues.append(
+                            ValidationIssue(
+                                code=f"SECURITY_{vuln_name.upper()}",
+                                message=f"Property '{prop_name}' default contains potential {vuln_name}",
+                                severity=ValidationSeverity.CRITICAL,
+                                field=f"inputSchema.properties.{prop_name}.default",
+                                suggestion="Remove shell metacharacters from default values",
+                            )
+                        )
 
         # Check for potential SSRF in URL-type properties
         for prop_name, prop_schema in properties.items():
@@ -580,15 +656,16 @@ class MCPToolValidator:
                 continue
 
             prop_format = prop_schema.get("format", "")
-            if prop_format in ("uri", "url"):
-                if "pattern" not in prop_schema:
-                    issues.append(ValidationIssue(
+            if prop_format in ("uri", "url") and "pattern" not in prop_schema:
+                issues.append(
+                    ValidationIssue(
                         code="SECURITY_SSRF_RISK",
                         message=f"URL property '{prop_name}' has no pattern validation",
                         severity=ValidationSeverity.WARNING,
                         field=f"inputSchema.properties.{prop_name}",
                         suggestion="Add pattern to restrict to allowed domains/protocols",
-                    ))
+                    )
+                )
 
         # Check for path traversal risks in file-related properties
         file_property_hints = ["file", "path", "directory", "folder", "location"]
@@ -598,17 +675,19 @@ class MCPToolValidator:
 
             if any(hint in prop_name.lower() for hint in file_property_hints):
                 if "pattern" not in prop_schema:
-                    issues.append(ValidationIssue(
-                        code="SECURITY_PATH_TRAVERSAL_RISK",
-                        message=f"File path property '{prop_name}' has no pattern validation",
-                        severity=ValidationSeverity.WARNING,
-                        field=f"inputSchema.properties.{prop_name}",
-                        suggestion="Add pattern to prevent path traversal (e.g., reject ../)",
-                    ))
+                    issues.append(
+                        ValidationIssue(
+                            code="SECURITY_PATH_TRAVERSAL_RISK",
+                            message=f"File path property '{prop_name}' has no pattern validation",
+                            severity=ValidationSeverity.WARNING,
+                            field=f"inputSchema.properties.{prop_name}",
+                            suggestion="Add pattern to prevent path traversal (e.g., reject ../)",
+                        )
+                    )
 
         return issues
 
-    def _calculate_score(self, issues: List[ValidationIssue]) -> float:
+    def _calculate_score(self, issues: list[ValidationIssue]) -> float:
         """Calculate a quality score based on issues found."""
         score = 100.0
 
@@ -625,7 +704,7 @@ class MCPToolValidator:
 
         return max(0.0, score)
 
-    def validate_batch(self, tools: List[MCPToolDefinition]) -> Dict[str, ValidationResult]:
+    def validate_batch(self, tools: list[MCPToolDefinition]) -> dict[str, ValidationResult]:
         """
         Validate multiple tools at once.
 

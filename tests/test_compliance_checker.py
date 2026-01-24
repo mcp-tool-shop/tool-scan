@@ -13,8 +13,8 @@ import pytest
 
 from tool_scan import (
     ComplianceChecker,
-    ComplianceReport,
     ComplianceLevel,
+    ComplianceReport,
     ComplianceStatus,
 )
 
@@ -49,7 +49,6 @@ class TestComplianceChecker:
             check_optional=False,
         )
 
-
     # =========================================================================
     # BASIC FUNCTIONALITY TESTS
     # =========================================================================
@@ -70,7 +69,6 @@ class TestComplianceChecker:
         assert "search_database" in summary
         assert "COMPLIANT" in summary or "NON-COMPLIANT" in summary
 
-
     # =========================================================================
     # REQUIRED FIELD TESTS (MCP-REQ-*)
     # =========================================================================
@@ -80,7 +78,9 @@ class TestComplianceChecker:
         report = checker.check(missing_name_tool)
 
         assert not report.is_compliant
-        failed = [c for c in report.checks if c.id == "MCP-REQ-001" and c.status == ComplianceStatus.FAIL]
+        failed = [
+            c for c in report.checks if c.id == "MCP-REQ-001" and c.status == ComplianceStatus.FAIL
+        ]
         assert len(failed) > 0
 
     def test_mcp_req_002_description_required(self, checker, missing_description_tool):
@@ -88,7 +88,9 @@ class TestComplianceChecker:
         report = checker.check(missing_description_tool)
 
         assert not report.is_compliant
-        failed = [c for c in report.checks if c.id == "MCP-REQ-002" and c.status == ComplianceStatus.FAIL]
+        failed = [
+            c for c in report.checks if c.id == "MCP-REQ-002" and c.status == ComplianceStatus.FAIL
+        ]
         assert len(failed) > 0
 
     def test_mcp_req_003_schema_required(self, checker, missing_schema_tool):
@@ -96,9 +98,10 @@ class TestComplianceChecker:
         report = checker.check(missing_schema_tool)
 
         assert not report.is_compliant
-        failed = [c for c in report.checks if c.id == "MCP-REQ-003" and c.status == ComplianceStatus.FAIL]
+        failed = [
+            c for c in report.checks if c.id == "MCP-REQ-003" and c.status == ComplianceStatus.FAIL
+        ]
         assert len(failed) > 0
-
 
     # =========================================================================
     # NAME FORMAT TESTS (MCP-REQ-004, MCP-REQ-005)
@@ -133,7 +136,6 @@ class TestComplianceChecker:
         assert check is not None
         assert check.status == ComplianceStatus.FAIL
 
-
     # =========================================================================
     # SCHEMA STRUCTURE TESTS (MCP-REQ-006 to MCP-REQ-009)
     # =========================================================================
@@ -163,7 +165,6 @@ class TestComplianceChecker:
         assert check is not None
         assert check.status == ComplianceStatus.FAIL
 
-
     # =========================================================================
     # ANNOTATION TESTS (MCP-REQ-010 to MCP-REQ-012)
     # =========================================================================
@@ -180,7 +181,9 @@ class TestComplianceChecker:
         }
         report = checker.check(tool)
 
-        failed = [c for c in report.checks if "MCP-REQ-011" in c.id and c.status == ComplianceStatus.FAIL]
+        failed = [
+            c for c in report.checks if "MCP-REQ-011" in c.id and c.status == ComplianceStatus.FAIL
+        ]
         assert len(failed) > 0
 
     def test_valid_annotations_pass(self, checker, valid_complete_tool):
@@ -190,7 +193,6 @@ class TestComplianceChecker:
         annotation_checks = [c for c in report.checks if "MCP-REQ-011" in c.id]
         for check in annotation_checks:
             assert check.status == ComplianceStatus.PASS
-
 
     # =========================================================================
     # SECURITY BEST PRACTICE TESTS (SEC-*)
@@ -287,7 +289,6 @@ class TestComplianceChecker:
         assert len(path_checks) > 0
         assert any(c.status == ComplianceStatus.WARN for c in path_checks)
 
-
     # =========================================================================
     # QUALITY TESTS (QUAL-*)
     # =========================================================================
@@ -370,7 +371,6 @@ class TestComplianceChecker:
         assert check is not None
         assert check.status == ComplianceStatus.PASS
 
-
     # =========================================================================
     # ENTERPRISE STANDARDS TESTS (ENT-*)
     # =========================================================================
@@ -427,7 +427,6 @@ class TestComplianceChecker:
         assert check is not None
         assert check.status == ComplianceStatus.WARN
 
-
     # =========================================================================
     # COMPLIANCE LEVEL TESTS
     # =========================================================================
@@ -446,7 +445,6 @@ class TestComplianceChecker:
 
         optional_checks = [c for c in report.checks if c.level == ComplianceLevel.OPTIONAL]
         assert len(optional_checks) > 0
-
 
     # =========================================================================
     # COMPLIANCE SCORE TESTS
@@ -489,7 +487,6 @@ class TestComplianceChecker:
         # Required failure should have worse score
         assert required_report.compliance_score < recommended_report.compliance_score
 
-
     # =========================================================================
     # REPORT PROPERTIES TESTS
     # =========================================================================
@@ -525,7 +522,6 @@ class TestComplianceChecker:
         for check in report.passed_checks:
             assert check.status == ComplianceStatus.PASS
 
-
     # =========================================================================
     # BATCH CHECKING TESTS
     # =========================================================================
@@ -535,7 +531,7 @@ class TestComplianceChecker:
         reports = checker.check_batch(valid_tools_batch)
 
         assert len(reports) == 3
-        for name, report in reports.items():
+        for _name, report in reports.items():
             assert report.is_compliant or len(report.required_failures) == 0
 
     def test_check_batch_invalid(self, checker, invalid_tools_batch):
@@ -545,7 +541,6 @@ class TestComplianceChecker:
         assert len(reports) == 3
         non_compliant = [r for r in reports.values() if not r.is_compliant]
         assert len(non_compliant) >= 2
-
 
     # =========================================================================
     # METADATA TESTS
@@ -558,7 +553,6 @@ class TestComplianceChecker:
         assert "check_levels" in report.metadata
         assert "spec_version" in report.metadata
         assert report.metadata["spec_version"] == "2025-11-25"
-
 
     # =========================================================================
     # EDGE CASE TESTS

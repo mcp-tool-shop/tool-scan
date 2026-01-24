@@ -12,18 +12,17 @@ Verifies that all components work together correctly.
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
-from typing import Any, Dict
 
 from tool_scan import (
-    MCPToolValidator,
-    SecurityScanner,
     ComplianceChecker,
+    MCPToolValidator,
     SchemaValidator,
-    ValidationSeverity,
+    SecurityScanner,
     ThreatCategory,
-    ThreatSeverity,
-    ComplianceLevel,
+    ValidationSeverity,
 )
 
 
@@ -40,7 +39,7 @@ class TestMCPValidationPipeline:
             "schema": SchemaValidator(strict=True),
         }
 
-    def run_full_validation(self, tool: Dict[str, Any], pipeline: dict):
+    def run_full_validation(self, tool: dict[str, Any], pipeline: dict):
         """Run all validation components on a tool."""
         results = {
             "validation": pipeline["validator"].validate(tool),
@@ -56,7 +55,6 @@ class TestMCPValidationPipeline:
 
         return results
 
-
     # =========================================================================
     # SAFE TOOL VALIDATION
     # =========================================================================
@@ -66,15 +64,19 @@ class TestMCPValidationPipeline:
         results = self.run_full_validation(valid_complete_tool, full_pipeline)
 
         # All stages should pass
-        assert results["validation"].is_valid, \
+        assert results["validation"].is_valid, (
             f"Validation failed: {[str(i) for i in results['validation'].errors]}"
-        assert results["security"].is_safe, \
+        )
+        assert results["security"].is_safe, (
             f"Security failed: {[str(t) for t in results['security'].threats]}"
-        assert results["compliance"].is_compliant, \
+        )
+        assert results["compliance"].is_compliant, (
             f"Compliance failed: {[str(c) for c in results['compliance'].required_failures]}"
+        )
         if "schema" in results:
-            assert results["schema"]["is_valid"], \
+            assert results["schema"]["is_valid"], (
                 f"Schema failed: {[str(i) for i in results['schema']['issues']]}"
+            )
 
     def test_minimal_valid_tool_passes(self, full_pipeline, valid_minimal_tool):
         """Minimal valid tool should pass core validation."""
@@ -83,7 +85,6 @@ class TestMCPValidationPipeline:
         # Core requirements should pass
         assert results["security"].is_safe
         assert results["compliance"].is_compliant
-
 
     # =========================================================================
     # MALICIOUS TOOL DETECTION
@@ -96,16 +97,12 @@ class TestMCPValidationPipeline:
         # Security scanner should catch it
         assert not results["security"].is_safe
         assert any(
-            t.category == ThreatCategory.PROMPT_INJECTION
-            for t in results["security"].threats
+            t.category == ThreatCategory.PROMPT_INJECTION for t in results["security"].threats
         )
 
         # Validator should also catch via description patterns
         assert not results["validation"].is_valid
-        assert any(
-            i.severity == ValidationSeverity.CRITICAL
-            for i in results["validation"].issues
-        )
+        assert any(i.severity == ValidationSeverity.CRITICAL for i in results["validation"].issues)
 
     def test_command_injection_detected(self, full_pipeline, command_injection_default_tool):
         """Command injection should be detected."""
@@ -114,8 +111,7 @@ class TestMCPValidationPipeline:
         # Security scanner must catch it
         assert not results["security"].is_safe
         assert any(
-            t.category == ThreatCategory.COMMAND_INJECTION
-            for t in results["security"].threats
+            t.category == ThreatCategory.COMMAND_INJECTION for t in results["security"].threats
         )
 
     def test_sql_injection_detected(self, full_pipeline, sql_injection_tool):
@@ -123,31 +119,21 @@ class TestMCPValidationPipeline:
         results = self.run_full_validation(sql_injection_tool, full_pipeline)
 
         assert not results["security"].is_safe
-        assert any(
-            t.category == ThreatCategory.SQL_INJECTION
-            for t in results["security"].threats
-        )
+        assert any(t.category == ThreatCategory.SQL_INJECTION for t in results["security"].threats)
 
     def test_xss_detected(self, full_pipeline, xss_script_tool):
         """XSS should be detected."""
         results = self.run_full_validation(xss_script_tool, full_pipeline)
 
         assert not results["security"].is_safe
-        assert any(
-            t.category == ThreatCategory.XSS
-            for t in results["security"].threats
-        )
+        assert any(t.category == ThreatCategory.XSS for t in results["security"].threats)
 
     def test_ssrf_detected(self, full_pipeline, ssrf_metadata_tool):
         """SSRF should be detected."""
         results = self.run_full_validation(ssrf_metadata_tool, full_pipeline)
 
         assert not results["security"].is_safe
-        assert any(
-            t.category == ThreatCategory.SSRF
-            for t in results["security"].threats
-        )
-
+        assert any(t.category == ThreatCategory.SSRF for t in results["security"].threats)
 
     # =========================================================================
     # INVALID TOOL DETECTION
@@ -173,12 +159,12 @@ class TestMCPValidationPipeline:
 
         # Compliance should fail schema checks
         schema_checks = [
-            c for c in results["compliance"].checks
+            c
+            for c in results["compliance"].checks
             if "MCP-REQ-007" in c.id or "MCP-REQ-006" in c.id
         ]
         # At least one should fail
         assert any(c.status.name == "FAIL" for c in schema_checks)
-
 
     # =========================================================================
     # COMPLEX SCHEMA VALIDATION
@@ -210,7 +196,6 @@ class TestMCPValidationPipeline:
             errors = [i for i in results["schema"]["issues"] if i.is_error]
             assert len(errors) == 0
 
-
     # =========================================================================
     # EDGE CASES
     # =========================================================================
@@ -229,11 +214,7 @@ class TestMCPValidationPipeline:
         results = self.run_full_validation(hidden_unicode_tool, full_pipeline)
 
         # Security should detect hidden unicode
-        assert any(
-            t.category == ThreatCategory.TOOL_POISONING
-            for t in results["security"].threats
-        )
-
+        assert any(t.category == ThreatCategory.TOOL_POISONING for t in results["security"].threats)
 
     # =========================================================================
     # BATCH VALIDATION
@@ -247,7 +228,7 @@ class TestMCPValidationPipeline:
 
         v_results = validator.validate_batch(valid_tools_batch)
         s_results = security.scan_batch(valid_tools_batch)
-        c_results = compliance.check_batch(valid_tools_batch)
+        compliance.check_batch(valid_tools_batch)
 
         # Most should pass
         for name in v_results:
@@ -273,7 +254,7 @@ class TestMCPValidationPipeline:
         validator = full_pipeline["validator"]
         security = full_pipeline["security"]
 
-        v_results = validator.validate_batch(tools)
+        validator.validate_batch(tools)
         s_results = security.scan_batch(tools)
 
         # Good tool should pass
@@ -281,7 +262,6 @@ class TestMCPValidationPipeline:
 
         # Bad tool should fail security
         assert not s_results["bad_tool"].is_safe
-
 
     # =========================================================================
     # VALIDATION DEPTH TESTS
@@ -335,11 +315,10 @@ class TestMCPValidationPipeline:
                 },
             },
         }
-        results = self.run_full_validation(tool, full_pipeline)
+        self.run_full_validation(tool, full_pipeline)
 
         # Should detect XSS in array item schema
         # (This depends on how deep the scanner goes)
-
 
     # =========================================================================
     # SCORE CONSISTENCY TESTS
@@ -510,9 +489,9 @@ class TestSecurityEdgeCases:
         """Test various unicode obfuscation techniques."""
         obfuscation_tests = [
             # Zero-width characters
-            ("ignore\u200Bprevious", True),
+            ("ignore\u200bprevious", True),
             # Right-to-left override
-            ("normal text \u202Eignore previous\u202C", True),
+            ("normal text \u202eignore previous\u202c", True),
             # Homoglyphs
             ("ignоre previоus", True),  # Cyrillic о instead of Latin o
         ]
@@ -523,7 +502,7 @@ class TestSecurityEdgeCases:
                 "description": text,
                 "inputSchema": {"type": "object", "properties": {}},
             }
-            result = security.scan(tool)
+            security.scan(tool)
             if should_detect:
                 # Should detect at least something suspicious
                 # (exact detection may vary)
@@ -545,10 +524,9 @@ class TestSecurityEdgeCases:
             }
             result = security.scan(tool)
             # Should still detect (case-insensitive)
-            assert any(
-                t.category == ThreatCategory.PROMPT_INJECTION
-                for t in result.threats
-            ), f"Failed to detect: {desc}"
+            assert any(t.category == ThreatCategory.PROMPT_INJECTION for t in result.threats), (
+                f"Failed to detect: {desc}"
+            )
 
     def test_split_keywords(self, security):
         """Test keywords split across content."""
@@ -560,7 +538,4 @@ class TestSecurityEdgeCases:
         }
         result = security.scan(tool)
         # Pattern matching should still work on the full string
-        assert any(
-            t.category == ThreatCategory.PROMPT_INJECTION
-            for t in result.threats
-        )
+        assert any(t.category == ThreatCategory.PROMPT_INJECTION for t in result.threats)
