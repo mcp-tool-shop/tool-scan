@@ -1,0 +1,113 @@
+# Tool-Scan
+
+> Security scanner for MCP (Model Context Protocol) tools
+
+## Overview
+
+Tool-Scan catches security threats in MCP tools before they reach production. It detects tool poisoning, prompt injection, data exfiltration attempts, and command injection vulnerabilities.
+
+## Quick Start
+
+```bash
+pip install tool-scan
+
+# Scan a single tool
+tool-scan my_tool.json
+
+# Scan with strict mode (CI/CD)
+tool-scan --strict --min-score 80 tools/*.json
+
+# JSON output for automation
+tool-scan --json my_tool.json > report.json
+```
+
+## Python API
+
+```python
+from tool_scan import grade_tool
+
+tool = {
+    "name": "get_weather",
+    "description": "Gets current weather for a location.",
+    "inputSchema": {
+        "type": "object",
+        "properties": {
+            "city": {"type": "string", "description": "City name"}
+        },
+        "required": ["city"],
+        "additionalProperties": False
+    }
+}
+
+report = grade_tool(tool)
+
+print(f"Score: {report.score}/100")    # Score: 95/100
+print(f"Grade: {report.grade.letter}")  # Grade: A
+print(f"Safe: {report.is_safe}")        # Safe: True
+```
+
+## Security Checks
+
+### Tool Poisoning Detection
+- Hidden instructions in descriptions
+- Malicious payload patterns
+- Deceptive tool naming
+
+### Prompt Injection Detection
+- Safety override attempts
+- Jailbreak patterns
+- System prompt manipulation
+
+### Data Exfiltration Detection
+- Covert channel patterns
+- Unauthorized data access
+- Sensitive information leaks
+
+### Command Injection Detection
+- Shell metacharacters in defaults
+- Path traversal attempts
+- Dangerous command patterns
+
+### Schema Validation
+- Input validation completeness
+- Type safety checks
+- Additional properties restrictions
+
+## CLI Options
+
+| Option | Description |
+|--------|-------------|
+| `--strict` | Exit non-zero on any finding |
+| `--min-score N` | Minimum acceptable score (0-100) |
+| `--json` | Output JSON format |
+| `--sarif` | Output SARIF format for IDE integration |
+| `--verbose` | Show detailed findings |
+
+## Grading Scale
+
+| Grade | Score | Status |
+|-------|-------|--------|
+| A | 90-100 | Safe for production |
+| B | 80-89 | Minor issues |
+| C | 70-79 | Review recommended |
+| D | 60-69 | Significant concerns |
+| F | 0-59 | Unsafe |
+
+## CI/CD Integration
+
+```yaml
+# GitHub Actions example
+- name: Scan MCP Tools
+  run: tool-scan --strict --min-score 80 tools/*.json
+```
+
+## Links
+
+- Repository: https://github.com/mcp-tool-shop/tool-scan
+- PyPI: https://pypi.org/project/tool-scan/
+- Documentation: https://github.com/mcp-tool-shop/tool-scan#readme
+- Issues: https://github.com/mcp-tool-shop/tool-scan/issues
+
+## License
+
+MIT License
