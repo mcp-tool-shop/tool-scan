@@ -115,6 +115,23 @@ class ThreatPattern:
     owasp_id: str | None = None
 
 
+@dataclass
+class NormalizedText:
+    """Pre-normalized text blob for efficient scanning."""
+
+    original: str
+    lowercased: str
+    location: str
+
+
+@dataclass
+class CollectedBlobs:
+    """All text blobs collected from a tool for scanning."""
+
+    blobs: list[NormalizedText]
+    raw_strings: list[tuple[str, str]]  # (content, location) for encoding scan
+
+
 class SecurityScanner:
     """
     Advanced security scanner for MCP tools.
@@ -124,6 +141,11 @@ class SecurityScanner:
     2. Semantic analysis
     3. Behavioral heuristics
     4. Encoding detection
+
+    Performance optimizations:
+    - All regex patterns are compiled once at initialization
+    - Tool text is collected and normalized once per scan
+    - No repeated .lower() calls inside inner loops
     """
 
     # Prompt injection patterns - tool poisoning via descriptions
@@ -348,9 +370,101 @@ class SecurityScanner:
 
         return patterns
 
+    def _collect_text_blobs(self, tool: dict[str, Any]) -> CollectedBlobs:
+        """
+        Collect and pre-normalize all text from a tool for scanning.
+
+        This method gathers text from all relevant fields once, normalizing
+        it (e.g., lowercasing) ahead of time to avoid repeated transformations
+        inside inner loops.
+
+        Args:
+            tool: The tool definition
+
+        Returns:
+            CollectedBlobs with pre-normalized text blobs
+        """
+        blobs: list[NormalizedText] = []
+        raw_strings: list[tuple[str, str]] = []
+
+        def add_blob(text: str | None, location: str) -> None:
+            if text and isinstance(text, str):
+                blobs.append(NormalizedText(
+                    original=text,
+                    lowercased=text.lower(),
+                    location=location,
+                ))
+                raw_strings.append((text, location))
+
+        def collect_from_dict(data: dict[str, Any], location: str) -> None:
+            if not isinstance(data, dict):
+                return
+            for key, value in data.items():
+                key_location = f"{location}.{key}"
+                if isinstance(value, str):
+                    add_blob(value, key_location)
+                elif isinstance(value, dict):
+                    collect_from_dict(value, key_location)
+                elif isinstance(value, list):
+                    for i, item in enumerate(value):
+                        if isinstance(item, str):
+                            add_blob(item, f"{key_location}[{i}]")
+                        elif isinstance(item, dict):
+                            collect_from_dict(item, f"{key_location}[{i}]")
+
+        def collect_from_schema(schema: dict[str, Any], location: str) -> None:
+            if not isinstance(schema, dict):
+                return
+
+            properties = schema.get("properties", {})
+            for prop_name, prop_schema in properties.items():
+                if not isinstance(prop_schema, dict):
+                    continue
+
+                prop_location = f"{location}.properties.{prop_name}"
+
+                # Collect description
+                prop_desc = prop_schema.get("description")
+                if prop_desc:
+                    add_blob(prop_desc, f"{prop_location}.description")
+
+                # Collect default value
+                default = prop_schema.get("default")
+                if isinstance(default, str):
+                    add_blob(default, f"{prop_location}.default")
+
+                # Collect enum values
+                enum_values = prop_schema.get("enum", [])
+                for i, value in enumerate(enum_values):
+                    if isinstance(value, str):
+                        add_blob(value, f"{prop_location}.enum[{i}]")
+
+                # Collect examples
+                examples = prop_schema.get("examples", [])
+                for i, example in enumerate(examples):
+                    if isinstance(example, str):
+                        add_blob(example, f"{prop_location}.examples[{i}]")
+
+        # Collect from top-level fields
+        add_blob(tool.get("name"), "name")
+        add_blob(tool.get("description"), "description")
+
+        # Collect from inputSchema
+        schema = tool.get("inputSchema", {})
+        collect_from_schema(schema, "inputSchema")
+
+        # Collect from annotations
+        annotations = tool.get("annotations", {})
+        collect_from_dict(annotations, "annotations")
+
+        return CollectedBlobs(blobs=blobs, raw_strings=raw_strings)
+
     def scan(self, tool: dict[str, Any]) -> SecurityScanResult:
         """
         Perform a comprehensive security scan on an MCP tool.
+
+        Uses a single pre-normalization pass to avoid O(N*P) repeated
+        transformations when scanning against multiple patterns.
 
         Args:
             tool: The tool definition to scan
@@ -360,26 +474,27 @@ class SecurityScanner:
         """
         threats: list[SecurityThreat] = []
 
-        # Scan tool name
-        name = tool.get("name", "")
-        threats.extend(self._scan_text(name, "name"))
+        # Collect and pre-normalize all text once (P0 optimization)
+        collected = self._collect_text_blobs(tool)
 
-        # Scan description (primary target for tool poisoning)
+        # Scan all pre-collected blobs with compiled patterns
+        for blob in collected.blobs:
+            threats.extend(self._scan_normalized_blob(blob))
+
+        # Tool poisoning detection on description only
         description = tool.get("description", "")
-        threats.extend(self._scan_text(description, "description"))
-        threats.extend(self._scan_tool_poisoning(description, "description"))
+        if description:
+            # Find the pre-normalized description blob
+            desc_blob = next(
+                (b for b in collected.blobs if b.location == "description"),
+                None
+            )
+            if desc_blob:
+                threats.extend(self._scan_tool_poisoning_normalized(desc_blob))
 
-        # Scan input schema
-        schema = tool.get("inputSchema", {})
-        threats.extend(self._scan_schema(schema, "inputSchema"))
-
-        # Scan annotations
-        annotations = tool.get("annotations", {})
-        threats.extend(self._scan_dict(annotations, "annotations"))
-
-        # Check for encoded content
+        # Check for encoded content using raw strings
         if self.enable_encoding_scan:
-            threats.extend(self._scan_encoded_content(tool))
+            threats.extend(self._scan_encoded_content_from_blobs(collected.raw_strings))
 
         # Determine safety
         min_fail_severity = ThreatSeverity.MEDIUM if self.fail_on_medium else ThreatSeverity.HIGH
@@ -403,15 +518,13 @@ class SecurityScanner:
             },
         )
 
-    def _scan_text(self, text: str, location: str) -> list[SecurityThreat]:
-        """Scan a text string for threats."""
+    def _scan_normalized_blob(self, blob: NormalizedText) -> list[SecurityThreat]:
+        """Scan a pre-normalized text blob for threats."""
         threats = []
 
-        if not text:
-            return threats
-
         for threat_pattern in self._compiled_patterns:
-            match = threat_pattern.pattern.search(text)
+            # Patterns are compiled with re.IGNORECASE, so search original
+            match = threat_pattern.pattern.search(blob.original)
             if match:
                 threats.append(
                     SecurityThreat(
@@ -419,7 +532,7 @@ class SecurityScanner:
                         severity=threat_pattern.severity,
                         title=threat_pattern.title,
                         description=threat_pattern.description,
-                        location=location,
+                        location=blob.location,
                         matched_content=match.group(0)[:100],  # Limit matched content
                         mitigation=threat_pattern.mitigation,
                         cwe_id=threat_pattern.cwe_id,
@@ -428,6 +541,183 @@ class SecurityScanner:
                 )
 
         return threats
+
+    # Pre-computed instruction words set (avoid allocating list in hot path)
+    _INSTRUCTION_WORDS: frozenset[str] = frozenset([
+        "must", "always", "never", "ignore", "forget", "pretend",
+        "override", "bypass", "disable", "execute", "run", "call",
+        "before", "after", "instead", "when", "if",
+    ])
+
+    # Pre-computed invisible characters tuple (for membership tests)
+    _INVISIBLE_CHARS: tuple[str, ...] = (
+        "\u200b",  # Zero-width space
+        "\u200c",  # Zero-width non-joiner
+        "\u200d",  # Zero-width joiner
+        "\ufeff",  # BOM
+        "\u2060",  # Word joiner
+        "\u00ad",  # Soft hyphen
+    )
+
+    # Pre-computed homoglyphs dict
+    _HOMOGLYPHS: dict[str, str] = {
+        "а": "a",  # Cyrillic
+        "е": "e",
+        "о": "o",
+        "р": "p",
+        "с": "c",
+        "х": "x",
+    }
+
+    def _scan_tool_poisoning_normalized(self, blob: NormalizedText) -> list[SecurityThreat]:
+        """
+        Advanced tool poisoning detection using pre-normalized text.
+
+        Uses the pre-lowercased text to avoid redundant .lower() calls.
+        """
+        threats = []
+        description = blob.original
+        desc_lower = blob.lowercased
+        location = blob.location
+
+        # Check for instruction density using pre-lowercased text
+        instruction_count = sum(1 for word in self._INSTRUCTION_WORDS if word in desc_lower)
+        word_count = len(description.split())
+
+        if word_count > 0:
+            instruction_density = instruction_count / word_count
+            if instruction_density > 0.15:  # More than 15% instruction words
+                threats.append(
+                    SecurityThreat(
+                        category=ThreatCategory.TOOL_POISONING,
+                        severity=ThreatSeverity.MEDIUM,
+                        title="High instruction density",
+                        description=f"Description has unusually high density of instruction words ({instruction_density:.1%})",
+                        location=location,
+                        mitigation="Review description for hidden behavioral instructions",
+                    )
+                )
+
+        # Check for hidden unicode characters
+        for char in self._INVISIBLE_CHARS:
+            if char in description:
+                threats.append(
+                    SecurityThreat(
+                        category=ThreatCategory.TOOL_POISONING,
+                        severity=ThreatSeverity.HIGH,
+                        title="Hidden unicode characters",
+                        description=f"Description contains invisible unicode character (U+{ord(char):04X})",
+                        location=location,
+                        matched_content=f"U+{ord(char):04X}",
+                        mitigation="Remove invisible characters that may hide malicious content",
+                    )
+                )
+
+        # Check for homoglyph attacks
+        for homoglyph, latin in self._HOMOGLYPHS.items():
+            if homoglyph in description:
+                threats.append(
+                    SecurityThreat(
+                        category=ThreatCategory.TOOL_POISONING,
+                        severity=ThreatSeverity.MEDIUM,
+                        title="Homoglyph character detected",
+                        description=f"Non-Latin character resembling '{latin}' detected (may be deceptive)",
+                        location=location,
+                        mitigation="Use only ASCII characters in descriptions",
+                    )
+                )
+                break  # Only report once
+
+        # Check for excessive length (could hide instructions)
+        if len(description) > 2000:
+            threats.append(
+                SecurityThreat(
+                    category=ThreatCategory.TOOL_POISONING,
+                    severity=ThreatSeverity.LOW,
+                    title="Excessively long description",
+                    description=f"Description is {len(description)} characters (may hide instructions)",
+                    location=location,
+                    mitigation="Keep descriptions concise and focused",
+                )
+            )
+
+        return threats
+
+    def _scan_encoded_content_from_blobs(
+        self, raw_strings: list[tuple[str, str]]
+    ) -> list[SecurityThreat]:
+        """Detect and scan encoded content using pre-collected strings."""
+        threats = []
+
+        for content, location in raw_strings:
+            if not content:
+                continue
+
+            # Check for base64 encoded content
+            if len(content) >= 20 and re.match(r"^[A-Za-z0-9+/]+=*$", content):
+                try:
+                    decoded = base64.b64decode(content).decode("utf-8", errors="ignore")
+                    if len(decoded) > 10:
+                        # Create a normalized blob for scanning decoded content
+                        decoded_blob = NormalizedText(
+                            original=decoded,
+                            lowercased=decoded.lower(),
+                            location=f"{location} (base64 decoded)",
+                        )
+                        decoded_threats = self._scan_normalized_blob(decoded_blob)
+                        if decoded_threats:
+                            threats.append(
+                                SecurityThreat(
+                                    category=ThreatCategory.TOOL_POISONING,
+                                    severity=ThreatSeverity.HIGH,
+                                    title="Malicious content in base64 encoding",
+                                    description="Detected threats hidden in base64-encoded content",
+                                    location=location,
+                                    mitigation="Remove or validate all encoded content",
+                                )
+                            )
+                            threats.extend(decoded_threats)
+                except Exception:
+                    pass  # Not valid base64
+
+            # Check for hex-encoded content
+            if (
+                len(content) >= 20
+                and re.match(r"^[0-9a-fA-F]+$", content)
+                and len(content) % 2 == 0
+            ):
+                try:
+                    decoded = bytes.fromhex(content).decode("utf-8", errors="ignore")
+                    if len(decoded) > 10:
+                        decoded_blob = NormalizedText(
+                            original=decoded,
+                            lowercased=decoded.lower(),
+                            location=f"{location} (hex decoded)",
+                        )
+                        decoded_threats = self._scan_normalized_blob(decoded_blob)
+                        if decoded_threats:
+                            threats.append(
+                                SecurityThreat(
+                                    category=ThreatCategory.TOOL_POISONING,
+                                    severity=ThreatSeverity.HIGH,
+                                    title="Malicious content in hex encoding",
+                                    description="Detected threats hidden in hex-encoded content",
+                                    location=location,
+                                    mitigation="Remove or validate all encoded content",
+                                )
+                            )
+                            threats.extend(decoded_threats)
+                except Exception:
+                    pass  # Not valid hex
+
+        return threats
+
+    def _scan_text(self, text: str, location: str) -> list[SecurityThreat]:
+        """Scan a text string for threats (legacy method, kept for compatibility)."""
+        if not text:
+            return []
+        blob = NormalizedText(original=text, lowercased=text.lower(), location=location)
+        return self._scan_normalized_blob(blob)
 
     def _scan_tool_poisoning(self, description: str, location: str) -> list[SecurityThreat]:
         """
