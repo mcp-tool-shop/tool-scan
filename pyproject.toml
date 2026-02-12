@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "tool-scan"
-version = "1.0.0"
+version = "1.0.1"
 description = "Security scanner for MCP (Model Context Protocol) tools"
 readme = "README.md"
 license = "MIT"
@@ -54,11 +54,11 @@ dev = [
 tool-scan = "tool_scan.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/mcp-tool-shop/tool-scan"
-Documentation = "https://github.com/mcp-tool-shop/tool-scan#readme"
-Repository = "https://github.com/mcp-tool-shop/tool-scan"
-Issues = "https://github.com/mcp-tool-shop/tool-scan/issues"
-Changelog = "https://github.com/mcp-tool-shop/tool-scan/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/mcp-tool-shop-org/tool-scan"
+Documentation = "https://github.com/mcp-tool-shop-org/tool-scan#readme"
+Repository = "https://github.com/mcp-tool-shop-org/tool-scan"
+Issues = "https://github.com/mcp-tool-shop-org/tool-scan/issues"
+Changelog = "https://github.com/mcp-tool-shop-org/tool-scan/blob/main/CHANGELOG.md"
 
 [tool.hatch.build.targets.sdist]
 include = [
