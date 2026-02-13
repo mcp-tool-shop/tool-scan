@@ -32,6 +32,15 @@ MCP tools are powerful—they give AI models the ability to take real actions. B
 
 ## Installation
 
+### Via Homebrew (macOS/Linux) - Recommended
+
+```bash
+brew tap mcp-tool-shop-org/mcp-tools
+brew install tool-scan
+```
+
+### Via pip
+
 ```bash
 pip install tool-scan
 ```
