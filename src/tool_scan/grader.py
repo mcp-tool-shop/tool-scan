@@ -283,6 +283,19 @@ class MCPToolGrader:
             )
         )
 
+        # Apply inline suppressions from x-tool-scan-ignore
+        suppressed = 0
+        inline_ignores = tool.get("x-tool-scan-ignore", [])
+        if isinstance(inline_ignores, list) and inline_ignores:
+            ignore_set = {str(r) for r in inline_ignores}
+            kept: list[Remark] = []
+            for remark in remarks:
+                if remark.rule_id and remark.rule_id in ignore_set:
+                    suppressed += 1
+                else:
+                    kept.append(remark)
+            remarks = kept
+
         return GradeReport(
             tool_name=tool_name,
             score=final_score,
@@ -293,6 +306,7 @@ class MCPToolGrader:
             validation_result=validation_result,
             security_result=security_result,
             compliance_result=compliance_result,
+            suppressed_count=suppressed,
         )
 
     def _calculate_security_score(
