@@ -24,9 +24,14 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
+from . import __version__
 from .compliance_checker import ComplianceChecker, ComplianceReport, ComplianceStatus
 from .security_scanner import SecurityScanner, SecurityScanResult, ThreatSeverity
 from .tool_validator import MCPToolValidator, ValidationResult, ValidationSeverity
+
+# Versioning for the JSON report envelope
+REPORT_FORMAT_VERSION = "1.0.0"
+RULESET_VERSION = "2026.1"
 
 
 class Grade(Enum):
@@ -142,6 +147,9 @@ class GradeReport:
     def json_report(self) -> dict[str, Any]:
         """Generate a JSON-serializable report."""
         return {
+            "report_version": REPORT_FORMAT_VERSION,
+            "tool_scan_version": __version__,
+            "ruleset_version": RULESET_VERSION,
             "tool_name": self.tool_name,
             "score": round(self.score, 1),
             "grade": self.grade.letter,
