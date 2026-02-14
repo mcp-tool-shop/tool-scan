@@ -1,0 +1,19 @@
+{
+  "name": "get_weather",
+  "description": "Gets current weather for a location.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "city": {
+        "type": "string",
+        "description": "City name",
+        "maxLength": 200
+      }
+    },
+    "required": ["city"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": true
+  }
+}
