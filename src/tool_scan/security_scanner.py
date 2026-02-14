@@ -64,9 +64,11 @@ class SecurityThreat:
     mitigation: str | None = None
     cwe_id: str | None = None  # Common Weakness Enumeration ID
     owasp_id: str | None = None  # OWASP Top 10 ID
+    rule_id: str | None = None  # Stable rule identifier (e.g. TS-INJ-001)
 
     def __str__(self) -> str:
-        return f"[{self.severity.name}] {self.category.name}: {self.title}"
+        prefix = f"[{self.rule_id}] " if self.rule_id else ""
+        return f"{prefix}[{self.severity.name}] {self.category.name}: {self.title}"
 
 
 @dataclass
@@ -113,6 +115,7 @@ class ThreatPattern:
     mitigation: str | None = None
     cwe_id: str | None = None
     owasp_id: str | None = None
+    rule_id: str | None = None
 
 
 @dataclass
@@ -149,159 +152,176 @@ class SecurityScanner:
     """
 
     # Prompt injection patterns - tool poisoning via descriptions
-    INJECTION_PATTERNS: list[tuple[str, str, ThreatSeverity]] = [
+    # Tuples: (regex, title, severity, rule_id)
+    INJECTION_PATTERNS: list[tuple[str, str, ThreatSeverity, str]] = [
         # Direct instruction override
         (
             r"ignore\s+(all\s+)?(previous|prior|above|system)\s+(instructions?|rules?|constraints?|prompts?)",
             "Instruction override attempt",
             ThreatSeverity.CRITICAL,
+            "TS-INJ-001",
         ),
         (
             r"(forget|disregard|override)\s+(everything|all|what)\s+(you|I)\s+(know|told|said)",
             "Memory manipulation attempt",
             ThreatSeverity.CRITICAL,
+            "TS-INJ-002",
         ),
         (
             r"from\s+now\s+on[,\s]+(you\s+)?(will|must|should|are)",
             "Behavioral override attempt",
             ThreatSeverity.CRITICAL,
+            "TS-INJ-003",
         ),
         # Role manipulation
         (
             r"you\s+are\s+(now\s+)?(a|an|the)\s+[a-z]+\s+(that|who|which)",
             "Role assignment injection",
             ThreatSeverity.HIGH,
+            "TS-INJ-004",
         ),
-        (r"pretend\s+(to\s+be|you\s+are|you're)", "Identity manipulation", ThreatSeverity.HIGH),
-        (r"act\s+as\s+(if|though|a|an)", "Behavioral manipulation", ThreatSeverity.MEDIUM),
+        (r"pretend\s+(to\s+be|you\s+are|you're)", "Identity manipulation", ThreatSeverity.HIGH, "TS-INJ-005"),
+        (r"act\s+as\s+(if|though|a|an)", "Behavioral manipulation", ThreatSeverity.MEDIUM, "TS-INJ-006"),
         # Security bypass
         (
             r"(bypass|circumvent|disable|ignore)\s+(security|safety|validation|auth)",
             "Security bypass attempt",
             ThreatSeverity.CRITICAL,
+            "TS-INJ-007",
         ),
         (
             r"(jailbreak|unlock|escape)\s+(mode|restrictions?|limits?)",
             "Jailbreak attempt",
             ThreatSeverity.CRITICAL,
+            "TS-INJ-008",
         ),
         # Hidden instructions
-        (r"<\s*(system|admin|root|sudo)\s*>", "Fake system tag injection", ThreatSeverity.HIGH),
+        (r"<\s*(system|admin|root|sudo)\s*>", "Fake system tag injection", ThreatSeverity.HIGH, "TS-INJ-009"),
         (
             r"\[\s*(system|admin|root)\s*(message|prompt|instruction)\s*\]",
             "Fake system message injection",
             ThreatSeverity.HIGH,
+            "TS-INJ-010",
         ),
         # Deception
         (
             r"(don'?t|never)\s+tell\s+(the\s+)?(user|anyone|human)",
             "Deception instruction",
             ThreatSeverity.CRITICAL,
+            "TS-INJ-011",
         ),
         (
             r"(secretly|silently|quietly|covertly)\s+(do|perform|execute)",
             "Covert action instruction",
             ThreatSeverity.CRITICAL,
+            "TS-INJ-012",
         ),
         # Output manipulation
         (
             r"always\s+(respond|reply|say|output)\s+with",
             "Output manipulation",
             ThreatSeverity.MEDIUM,
+            "TS-INJ-013",
         ),
         (
             r"(start|begin|prefix)\s+(every|all|each)\s+(response|reply|output)",
             "Response prefix manipulation",
             ThreatSeverity.MEDIUM,
+            "TS-INJ-014",
         ),
     ]
 
     # Command injection patterns
-    COMMAND_INJECTION_PATTERNS: list[tuple[str, str, ThreatSeverity]] = [
-        (r";\s*[a-zA-Z]+", "Command chaining with semicolon", ThreatSeverity.HIGH),
-        (r"\|\s*[a-zA-Z]+", "Pipe injection", ThreatSeverity.HIGH),
-        (r"`[^`]+`", "Backtick command execution", ThreatSeverity.CRITICAL),
-        (r"\$\([^)]+\)", "Subshell execution", ThreatSeverity.CRITICAL),
-        (r"\$\{[^}]+\}", "Variable expansion", ThreatSeverity.HIGH),
-        (r"&&\s*[a-zA-Z]+", "Command chaining with &&", ThreatSeverity.HIGH),
-        (r"\|\|\s*[a-zA-Z]+", "Command chaining with ||", ThreatSeverity.HIGH),
-        (r">\s*/", "File redirect to root", ThreatSeverity.CRITICAL),
-        (r"<\s*/etc/", "Reading sensitive files", ThreatSeverity.CRITICAL),
-        (r"eval\s*\(", "Eval usage", ThreatSeverity.CRITICAL),
-        (r"exec\s*\(", "Exec usage", ThreatSeverity.HIGH),
+    COMMAND_INJECTION_PATTERNS: list[tuple[str, str, ThreatSeverity, str]] = [
+        (r";\s*[a-zA-Z]+", "Command chaining with semicolon", ThreatSeverity.HIGH, "TS-CMD-001"),
+        (r"\|\s*[a-zA-Z]+", "Pipe injection", ThreatSeverity.HIGH, "TS-CMD-002"),
+        (r"`[^`]+`", "Backtick command execution", ThreatSeverity.CRITICAL, "TS-CMD-003"),
+        (r"\$\([^)]+\)", "Subshell execution", ThreatSeverity.CRITICAL, "TS-CMD-004"),
+        (r"\$\{[^}]+\}", "Variable expansion", ThreatSeverity.HIGH, "TS-CMD-005"),
+        (r"&&\s*[a-zA-Z]+", "Command chaining with &&", ThreatSeverity.HIGH, "TS-CMD-006"),
+        (r"\|\|\s*[a-zA-Z]+", "Command chaining with ||", ThreatSeverity.HIGH, "TS-CMD-007"),
+        (r">\s*/", "File redirect to root", ThreatSeverity.CRITICAL, "TS-CMD-008"),
+        (r"<\s*/etc/", "Reading sensitive files", ThreatSeverity.CRITICAL, "TS-CMD-009"),
+        (r"eval\s*\(", "Eval usage", ThreatSeverity.CRITICAL, "TS-CMD-010"),
+        (r"exec\s*\(", "Exec usage", ThreatSeverity.HIGH, "TS-CMD-011"),
     ]
 
     # SQL injection patterns
-    SQL_INJECTION_PATTERNS: list[tuple[str, str, ThreatSeverity]] = [
-        (r"'\s*(OR|AND)\s*'?\d*'?\s*=\s*'?\d*", "SQL boolean injection", ThreatSeverity.CRITICAL),
+    SQL_INJECTION_PATTERNS: list[tuple[str, str, ThreatSeverity, str]] = [
+        (r"'\s*(OR|AND)\s*'?\d*'?\s*=\s*'?\d*", "SQL boolean injection", ThreatSeverity.CRITICAL, "TS-SQL-001"),
         (
             r";\s*(DROP|DELETE|TRUNCATE|UPDATE|INSERT)\s+",
             "SQL destructive injection",
             ThreatSeverity.CRITICAL,
+            "TS-SQL-002",
         ),
-        (r"UNION\s+(ALL\s+)?SELECT", "SQL UNION injection", ThreatSeverity.CRITICAL),
-        (r"--\s*$", "SQL comment injection", ThreatSeverity.HIGH),
-        (r"/\*.*\*/", "SQL block comment", ThreatSeverity.MEDIUM),
-        (r"'\s*;\s*--", "SQL termination injection", ThreatSeverity.CRITICAL),
+        (r"UNION\s+(ALL\s+)?SELECT", "SQL UNION injection", ThreatSeverity.CRITICAL, "TS-SQL-003"),
+        (r"--\s*$", "SQL comment injection", ThreatSeverity.HIGH, "TS-SQL-004"),
+        (r"/\*.*\*/", "SQL block comment", ThreatSeverity.MEDIUM, "TS-SQL-005"),
+        (r"'\s*;\s*--", "SQL termination injection", ThreatSeverity.CRITICAL, "TS-SQL-006"),
     ]
 
     # XSS patterns
-    XSS_PATTERNS: list[tuple[str, str, ThreatSeverity]] = [
-        (r"<script[^>]*>", "Script tag injection", ThreatSeverity.CRITICAL),
-        (r"javascript\s*:", "JavaScript protocol", ThreatSeverity.CRITICAL),
-        (r"on(load|error|click|mouse\w+)\s*=", "Event handler injection", ThreatSeverity.HIGH),
-        (r"<iframe[^>]*>", "IFrame injection", ThreatSeverity.HIGH),
-        (r"<object[^>]*>", "Object tag injection", ThreatSeverity.HIGH),
-        (r"<embed[^>]*>", "Embed tag injection", ThreatSeverity.HIGH),
-        (r"expression\s*\(", "CSS expression", ThreatSeverity.HIGH),
-        (r"data:\s*text/html", "Data URI HTML", ThreatSeverity.HIGH),
+    XSS_PATTERNS: list[tuple[str, str, ThreatSeverity, str]] = [
+        (r"<script[^>]*>", "Script tag injection", ThreatSeverity.CRITICAL, "TS-XSS-001"),
+        (r"javascript\s*:", "JavaScript protocol", ThreatSeverity.CRITICAL, "TS-XSS-002"),
+        (r"on(load|error|click|mouse\w+)\s*=", "Event handler injection", ThreatSeverity.HIGH, "TS-XSS-003"),
+        (r"<iframe[^>]*>", "IFrame injection", ThreatSeverity.HIGH, "TS-XSS-004"),
+        (r"<object[^>]*>", "Object tag injection", ThreatSeverity.HIGH, "TS-XSS-005"),
+        (r"<embed[^>]*>", "Embed tag injection", ThreatSeverity.HIGH, "TS-XSS-006"),
+        (r"expression\s*\(", "CSS expression", ThreatSeverity.HIGH, "TS-XSS-007"),
+        (r"data:\s*text/html", "Data URI HTML", ThreatSeverity.HIGH, "TS-XSS-008"),
     ]
 
     # Path traversal patterns
-    PATH_TRAVERSAL_PATTERNS: list[tuple[str, str, ThreatSeverity]] = [
-        (r"\.\./", "Directory traversal (../)", ThreatSeverity.HIGH),
-        (r"\.\.\\", "Directory traversal (..\\)", ThreatSeverity.HIGH),
-        (r"%2e%2e[/%5c]", "URL-encoded traversal", ThreatSeverity.HIGH),
-        (r"/etc/(passwd|shadow|hosts)", "Sensitive file access", ThreatSeverity.CRITICAL),
-        (r"C:\\Windows\\", "Windows system directory", ThreatSeverity.HIGH),
-        (r"\\\\[a-zA-Z0-9]+\\", "UNC path", ThreatSeverity.MEDIUM),
+    PATH_TRAVERSAL_PATTERNS: list[tuple[str, str, ThreatSeverity, str]] = [
+        (r"\.\./", "Directory traversal (../)", ThreatSeverity.HIGH, "TS-PTR-001"),
+        (r"\.\.\\", "Directory traversal (..\\)", ThreatSeverity.HIGH, "TS-PTR-002"),
+        (r"%2e%2e[/%5c]", "URL-encoded traversal", ThreatSeverity.HIGH, "TS-PTR-003"),
+        (r"/etc/(passwd|shadow|hosts)", "Sensitive file access", ThreatSeverity.CRITICAL, "TS-PTR-004"),
+        (r"C:\\Windows\\", "Windows system directory", ThreatSeverity.HIGH, "TS-PTR-005"),
+        (r"\\\\[a-zA-Z0-9]+\\", "UNC path", ThreatSeverity.MEDIUM, "TS-PTR-006"),
     ]
 
     # Data exfiltration patterns
-    EXFILTRATION_PATTERNS: list[tuple[str, str, ThreatSeverity]] = [
+    EXFILTRATION_PATTERNS: list[tuple[str, str, ThreatSeverity, str]] = [
         (
             r"(send|post|transmit|upload)\s+(to|data\s+to)\s+https?://",
             "External data transmission",
             ThreatSeverity.CRITICAL,
+            "TS-EXF-001",
         ),
         (
             r"(read|access|get|fetch)\s+(all\s+)?(files?|data|credentials?|secrets?|keys?)",
             "Broad data access",
             ThreatSeverity.HIGH,
+            "TS-EXF-002",
         ),
         (
             r"(exfiltrate|extract|steal|copy)\s+(data|files?|information)",
             "Explicit exfiltration",
             ThreatSeverity.CRITICAL,
+            "TS-EXF-003",
         ),
-        (r"(curl|wget|fetch)\s+.*\s+-d\s+", "Command-line data exfiltration", ThreatSeverity.HIGH),
-        (r"base64\s+(encode|decode)", "Base64 encoding (possible obfuscation)", ThreatSeverity.LOW),
+        (r"(curl|wget|fetch)\s+.*\s+-d\s+", "Command-line data exfiltration", ThreatSeverity.HIGH, "TS-EXF-004"),
+        (r"base64\s+(encode|decode)", "Base64 encoding (possible obfuscation)", ThreatSeverity.LOW, "TS-EXF-005"),
     ]
 
     # SSRF patterns
-    SSRF_PATTERNS: list[tuple[str, str, ThreatSeverity]] = [
-        (r"(127\.0\.0\.1|localhost|0\.0\.0\.0)", "Localhost access", ThreatSeverity.MEDIUM),
-        (r"169\.254\.\d+\.\d+", "AWS metadata endpoint", ThreatSeverity.CRITICAL),
-        (r"192\.168\.\d+\.\d+", "Private network access", ThreatSeverity.MEDIUM),
-        (r"10\.\d+\.\d+\.\d+", "Private network access (10.x)", ThreatSeverity.MEDIUM),
+    SSRF_PATTERNS: list[tuple[str, str, ThreatSeverity, str]] = [
+        (r"(127\.0\.0\.1|localhost|0\.0\.0\.0)", "Localhost access", ThreatSeverity.MEDIUM, "TS-SSR-001"),
+        (r"169\.254\.\d+\.\d+", "AWS metadata endpoint", ThreatSeverity.CRITICAL, "TS-SSR-002"),
+        (r"192\.168\.\d+\.\d+", "Private network access", ThreatSeverity.MEDIUM, "TS-SSR-003"),
+        (r"10\.\d+\.\d+\.\d+", "Private network access (10.x)", ThreatSeverity.MEDIUM, "TS-SSR-004"),
         (
             r"172\.(1[6-9]|2\d|3[01])\.\d+\.\d+",
             "Private network access (172.x)",
             ThreatSeverity.MEDIUM,
+            "TS-SSR-005",
         ),
-        (r"file://", "File protocol access", ThreatSeverity.HIGH),
-        (r"gopher://", "Gopher protocol access", ThreatSeverity.HIGH),
-        (r"dict://", "Dict protocol access", ThreatSeverity.MEDIUM),
+        (r"file://", "File protocol access", ThreatSeverity.HIGH, "TS-SSR-006"),
+        (r"gopher://", "Gopher protocol access", ThreatSeverity.HIGH, "TS-SSR-007"),
+        (r"dict://", "Dict protocol access", ThreatSeverity.MEDIUM, "TS-SSR-008"),
     ]
 
     def __init__(
@@ -357,7 +377,7 @@ class SecurityScanner:
         for source_patterns, category, enabled in pattern_sources:
             if not enabled:
                 continue
-            for regex, title, severity in source_patterns:
+            for regex, title, severity, rule_id in source_patterns:
                 patterns.append(
                     ThreatPattern(
                         pattern=re.compile(regex, re.IGNORECASE),
@@ -365,6 +385,7 @@ class SecurityScanner:
                         severity=severity,
                         title=title,
                         description=f"Detected {title.lower()}",
+                        rule_id=rule_id,
                     )
                 )
 
@@ -537,6 +558,7 @@ class SecurityScanner:
                         mitigation=threat_pattern.mitigation,
                         cwe_id=threat_pattern.cwe_id,
                         owasp_id=threat_pattern.owasp_id,
+                        rule_id=threat_pattern.rule_id,
                     )
                 )
 
@@ -595,6 +617,7 @@ class SecurityScanner:
                         description=f"Description has unusually high density of instruction words ({instruction_density:.1%})",
                         location=location,
                         mitigation="Review description for hidden behavioral instructions",
+                        rule_id="TS-PSN-001",
                     )
                 )
 
@@ -610,6 +633,7 @@ class SecurityScanner:
                         location=location,
                         matched_content=f"U+{ord(char):04X}",
                         mitigation="Remove invisible characters that may hide malicious content",
+                        rule_id="TS-PSN-002",
                     )
                 )
 
@@ -624,6 +648,7 @@ class SecurityScanner:
                         description=f"Non-Latin character resembling '{latin}' detected (may be deceptive)",
                         location=location,
                         mitigation="Use only ASCII characters in descriptions",
+                        rule_id="TS-PSN-003",
                     )
                 )
                 break  # Only report once
@@ -638,6 +663,7 @@ class SecurityScanner:
                     description=f"Description is {len(description)} characters (may hide instructions)",
                     location=location,
                     mitigation="Keep descriptions concise and focused",
+                    rule_id="TS-PSN-004",
                 )
             )
 
@@ -674,6 +700,7 @@ class SecurityScanner:
                                     description="Detected threats hidden in base64-encoded content",
                                     location=location,
                                     mitigation="Remove or validate all encoded content",
+                                    rule_id="TS-ENC-001",
                                 )
                             )
                             threats.extend(decoded_threats)
@@ -704,6 +731,7 @@ class SecurityScanner:
                                     description="Detected threats hidden in hex-encoded content",
                                     location=location,
                                     mitigation="Remove or validate all encoded content",
+                                    rule_id="TS-ENC-002",
                                 )
                             )
                             threats.extend(decoded_threats)
