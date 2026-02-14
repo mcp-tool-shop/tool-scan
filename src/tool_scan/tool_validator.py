@@ -22,6 +22,8 @@ from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import Any, TypedDict
 
+from .security_scanner import SecurityScanner, ThreatSeverity
+
 
 class ValidationSeverity(Enum):
     """Severity levels for validation issues."""
@@ -617,79 +619,32 @@ class MCPToolValidator:
         return issues
 
     def _scan_security(self, tool: dict[str, Any]) -> list[ValidationIssue]:
-        """Scan for security vulnerabilities."""
+        """Delegate security scanning to SecurityScanner (single source of truth).
+
+        Converts SecurityScanner threats into ValidationIssues so callers
+        that consume the validator directly still see security findings.
+        """
+        scanner = SecurityScanner()
+        result = scanner.scan(tool)
+
+        severity_map = {
+            ThreatSeverity.LOW: ValidationSeverity.INFO,
+            ThreatSeverity.MEDIUM: ValidationSeverity.WARNING,
+            ThreatSeverity.HIGH: ValidationSeverity.ERROR,
+            ThreatSeverity.CRITICAL: ValidationSeverity.CRITICAL,
+        }
+
         issues: list[ValidationIssue] = []
-
-        # Check for command injection patterns in schema defaults
-        schema = tool.get("inputSchema") or {}
-        if not isinstance(schema, dict):
-            return issues  # Can't scan non-dict schema
-        properties = schema.get("properties") or {}
-
-        dangerous_default_patterns = [
-            (r";\s*\w+", "command_chaining"),
-            (r"\|\s*\w+", "pipe_injection"),
-            (r"`[^`]+`", "backtick_execution"),
-            (r"\$\([^)]+\)", "subshell_execution"),
-            (r">\s*/", "file_redirect"),
-            (r"<\s*/", "file_input"),
-        ]
-
-        for prop_name, prop_schema in properties.items():
-            if not isinstance(prop_schema, dict):
-                continue
-
-            default = prop_schema.get("default", "")
-            if isinstance(default, str):
-                for pattern, vuln_name in dangerous_default_patterns:
-                    if re.search(pattern, default):
-                        issues.append(
-                            ValidationIssue(
-                                code=f"SECURITY_{vuln_name.upper()}",
-                                message=f"Property '{prop_name}' default contains potential {vuln_name}",
-                                severity=ValidationSeverity.CRITICAL,
-                                field=f"inputSchema.properties.{prop_name}.default",
-                                suggestion="Remove shell metacharacters from default values",
-                            )
-                        )
-
-        # Check for potential SSRF in URL-type properties
-        for prop_name, prop_schema in properties.items():
-            if not isinstance(prop_schema, dict):
-                continue
-
-            prop_format = prop_schema.get("format", "")
-            if prop_format in ("uri", "url") and "pattern" not in prop_schema:
-                issues.append(
-                    ValidationIssue(
-                        code="SECURITY_SSRF_RISK",
-                        message=f"URL property '{prop_name}' has no pattern validation",
-                        severity=ValidationSeverity.WARNING,
-                        field=f"inputSchema.properties.{prop_name}",
-                        suggestion="Add pattern to restrict to allowed domains/protocols",
-                    )
+        for threat in result.threats:
+            issues.append(
+                ValidationIssue(
+                    code=f"SECURITY_{threat.category.name}",
+                    message=threat.description,
+                    severity=severity_map.get(threat.severity, ValidationSeverity.WARNING),
+                    field=threat.location,
+                    suggestion=threat.mitigation,
                 )
-
-        # Check for path traversal risks in file-related properties
-        file_property_hints = ["file", "path", "directory", "folder", "location"]
-        for prop_name, prop_schema in properties.items():
-            if not isinstance(prop_schema, dict):
-                continue
-
-            if (
-                any(hint in prop_name.lower() for hint in file_property_hints)
-                and "pattern" not in prop_schema
-            ):
-                issues.append(
-                    ValidationIssue(
-                        code="SECURITY_PATH_TRAVERSAL_RISK",
-                        message=f"File path property '{prop_name}' has no pattern validation",
-                        severity=ValidationSeverity.WARNING,
-                        field=f"inputSchema.properties.{prop_name}",
-                        suggestion="Add pattern to prevent path traversal (e.g., reject ../)",
-                    )
-                )
-
+            )
         return issues
 
     def _calculate_score(self, issues: list[ValidationIssue]) -> float:
