@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
+
+import pytest
 
 from tool_scan.config import ToolScanConfig, load_config
 
@@ -81,20 +84,17 @@ class TestLoadConfigJSON:
         assert cfg.ignore_rules == []  # default
 
     def test_missing_config_raises(self) -> None:
-        import pytest
-
         with pytest.raises(FileNotFoundError):
             load_config("/nonexistent/path.json")
 
     def test_invalid_format_raises(self, tmp_path: Path) -> None:
-        import pytest
-
         yaml_file = tmp_path / "config.yaml"
         yaml_file.write_text("key: value")
         with pytest.raises(ValueError, match="Unsupported config format"):
             load_config(str(yaml_file))
 
 
+@pytest.mark.skipif(sys.version_info < (3, 11), reason="tomllib requires Python 3.11+")
 class TestLoadConfigTOML:
     """Test loading TOML config files."""
 

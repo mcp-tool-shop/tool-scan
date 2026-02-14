@@ -1,6 +1,8 @@
 <div align="center">
 
-# Tool-Scan
+<img src="assets/logo.png" alt="Tool-Scan" width="400">
+
+<br>
 
 **Security scanner for MCP (Model Context Protocol) tools**
 
