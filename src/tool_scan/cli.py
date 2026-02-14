@@ -41,6 +41,7 @@ from .baseline import BaselineFile, compare_with_baseline, load_baseline, save_b
 from .config import ToolScanConfig, load_config
 from .grader import Grade, GradeReport, MCPToolGrader, Remark
 from .junit import grade_reports_to_junit
+from .profile import ScanProfiler
 from .sarif import reports_to_sarif
 
 
@@ -435,6 +436,12 @@ Exit codes:
         help="Load custom rule plugins from DIR (*.py files with get_rules())",
     )
 
+    parser.add_argument(
+        "--profile",
+        action="store_true",
+        help="Print per-stage timing breakdown (for large-repo performance analysis)",
+    )
+
     parsed = parser.parse_args(args)
 
     # Load config file (explicit path or auto-discover)
@@ -463,6 +470,11 @@ Exit codes:
             print(f"Error loading rules: {e}", file=sys.stderr)
             return 2
 
+    # Initialize profiler
+    profiler = ScanProfiler()
+    if parsed.profile:
+        profiler.start()
+
     # Initialize grader
     grader = MCPToolGrader(
         strict_security=parsed.strict,
@@ -476,16 +488,19 @@ Exit codes:
 
     for file_path in parsed.files:
         try:
-            tool = load_tool(file_path)
+            with profiler.stage("load"):
+                tool = load_tool(file_path)
 
             # Handle arrays of tools
             if isinstance(tool, list):
                 for i, t in enumerate(tool):
                     name = t.get("name", f"tool_{i}")
-                    reports[name] = grader.grade(t)
+                    with profiler.stage("grade"):
+                        reports[name] = grader.grade(t)
             else:
                 name = tool.get("name", Path(file_path).stem if file_path != "-" else "stdin")
-                reports[name] = grader.grade(tool)
+                with profiler.stage("grade"):
+                    reports[name] = grader.grade(tool)
 
         except json.JSONDecodeError as e:
             errors.append(f"Invalid JSON in {file_path}: {e}")
@@ -523,13 +538,22 @@ Exit codes:
     fmt = parsed.format or ("json" if parsed.json else "text")
 
     # Generate output string
-    output_text = _render_output(fmt, reports, errors, parsed)
+    with profiler.stage("output"):
+        output_text = _render_output(fmt, reports, errors, parsed)
 
     # Write to file or stdout
     if parsed.out:
         Path(parsed.out).write_text(output_text, encoding="utf-8")
     elif output_text:
         print(output_text)
+
+    # Print profiling results
+    if parsed.profile:
+        profile_result = profiler.result(tool_count=len(reports))
+        if fmt == "json":
+            print(json.dumps({"profile": profile_result.json_report}, indent=2), file=sys.stderr)
+        else:
+            print(profile_result.summary(), file=sys.stderr)
 
     # Determine exit code
     if parsed.fail_on_new and baseline:

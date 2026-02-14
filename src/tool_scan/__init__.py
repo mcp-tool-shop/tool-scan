@@ -35,6 +35,7 @@ from .compliance_checker import (
 )
 from .config import ToolScanConfig, load_config
 from .grader import Grade, GradeReport, MCPToolGrader, Remark, RemarkCategory, grade_tool
+from .profile import ProfileResult, ScanProfiler, StageResult
 from .schema_validator import SchemaDialect, SchemaIssue, SchemaValidator
 from .security_scanner import (
     SecurityScanner,
@@ -72,6 +73,10 @@ __all__ = [
     # Config
     "ToolScanConfig",
     "load_config",
+    # Profiler
+    "ScanProfiler",
+    "ProfileResult",
+    "StageResult",
     # Grader (main entry point)
     "MCPToolGrader",
     "GradeReport",
