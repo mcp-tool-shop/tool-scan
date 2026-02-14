@@ -40,7 +40,7 @@ from typing import Any
 from .baseline import BaselineFile, compare_with_baseline, load_baseline, save_baseline
 from .config import ToolScanConfig, load_config
 from .discovery import discover_files
-from .grader import Grade, GradeReport, MCPToolGrader, Remark
+from .grader import Grade, GradeReport, MCPToolGrader, Remark, RemarkCategory
 from .junit import grade_reports_to_junit
 from .profile import ScanProfiler
 from .sarif import reports_to_sarif
@@ -156,8 +156,34 @@ def print_report(report: GradeReport, verbose: bool = False) -> None:
     print()
 
 
-def print_summary_table(reports: dict[str, GradeReport]) -> None:
-    """Print a summary table for multiple tools."""
+def _count_categories(reports: dict[str, GradeReport]) -> dict[str, int]:
+    """Count total remarks by category across all reports."""
+    counts: dict[str, int] = {
+        "critical": 0,
+        "security": 0,
+        "compliance": 0,
+        "quality": 0,
+    }
+    for report in reports.values():
+        for remark in report.remarks:
+            if remark.category == RemarkCategory.CRITICAL:
+                counts["critical"] += 1
+            elif remark.category == RemarkCategory.SECURITY:
+                counts["security"] += 1
+            elif remark.category == RemarkCategory.COMPLIANCE:
+                counts["compliance"] += 1
+            elif remark.category in (RemarkCategory.QUALITY, RemarkCategory.BEST_PRACTICE):
+                counts["quality"] += 1
+    return counts
+
+
+def print_summary_table(reports: dict[str, GradeReport], top_n: int = 0) -> None:
+    """Print a summary table for multiple tools.
+
+    Args:
+        reports: Dict of tool name to GradeReport.
+        top_n: If > 0, show only the N worst-scoring tools.
+    """
     print()
     print(f"{Colors.BOLD}Summary{Colors.RESET}")
     print()
@@ -166,8 +192,13 @@ def print_summary_table(reports: dict[str, GradeReport]) -> None:
     print(f"  {'Tool Name':<40} {'Score':>7} {'Grade':>7} {'Status':>10}")
     print(f"  {'-' * 40} {'-' * 7} {'-' * 7} {'-' * 10}")
 
+    # Sort by score ascending (worst first) when --top is used,
+    # otherwise descending (best first)
+    sorted_items = sorted(reports.items(), key=lambda x: x[1].score)
+    display_items = sorted_items[:top_n] if top_n > 0 else list(reversed(sorted_items))
+
     # Rows
-    for name, report in sorted(reports.items(), key=lambda x: -x[1].score):
+    for name, report in display_items:
         status = (
             f"{Colors.GREEN}Safe{Colors.RESET}"
             if report.is_safe
@@ -179,6 +210,10 @@ def print_summary_table(reports: dict[str, GradeReport]) -> None:
             f"{colorize_grade(report.grade):>7} "
             f"{status:>10}"
         )
+
+    if top_n > 0 and len(reports) > top_n:
+        omitted = len(reports) - top_n
+        print(f"  {Colors.CYAN}... and {omitted} more tools (showing top {top_n} worst){Colors.RESET}")
 
     print()
 
@@ -192,6 +227,22 @@ def print_summary_table(reports: dict[str, GradeReport]) -> None:
     print(f"  {Colors.BOLD}Average Score:{Colors.RESET} {colorize_score(avg_score)}")
     print(f"  {Colors.BOLD}Safe:{Colors.RESET} {safe}/{total}")
     print(f"  {Colors.BOLD}Compliant:{Colors.RESET} {compliant}/{total}")
+
+    # Category breakdown
+    cats = _count_categories(reports)
+    total_findings = sum(cats.values())
+    if total_findings > 0:
+        print()
+        print(f"  {Colors.BOLD}Findings:{Colors.RESET} {total_findings} total")
+        if cats["critical"]:
+            print(f"    {Colors.RED}Critical:{Colors.RESET} {cats['critical']}")
+        if cats["security"]:
+            print(f"    {Colors.MAGENTA}Security:{Colors.RESET} {cats['security']}")
+        if cats["compliance"]:
+            print(f"    {Colors.YELLOW}Compliance:{Colors.RESET} {cats['compliance']}")
+        if cats["quality"]:
+            print(f"    {Colors.BLUE}Quality:{Colors.RESET} {cats['quality']}")
+
     print()
 
 
@@ -224,6 +275,7 @@ def _render_output(
     the caller doesn't double-print.
     """
     if fmt == "json":
+        cats = _count_categories(reports)
         output = {
             "results": {name: report.json_report for name, report in reports.items()},
             "summary": {
@@ -237,6 +289,7 @@ def _render_output(
                 "average_score": sum(r.score for r in reports.values()) / len(reports)
                 if reports
                 else 0,
+                "findings": cats,
             },
             "errors": errors,
         }
@@ -259,7 +312,7 @@ def _render_output(
         for report in reports.values():
             print_report(report, verbose=parsed.verbose)
         if len(reports) > 1:
-            print_summary_table(reports)
+            print_summary_table(reports, top_n=parsed.top)
         return ""
 
     # When writing text to file, build a plain-text version
@@ -458,6 +511,14 @@ Exit codes:
         metavar="GLOB",
         default=None,
         help="Exclude files/dirs matching GLOB when scanning directories. Repeatable.",
+    )
+
+    parser.add_argument(
+        "--top",
+        type=int,
+        default=0,
+        metavar="N",
+        help="Show only the N worst-scoring tools in the summary table",
     )
 
     parsed = parser.parse_args(args)
