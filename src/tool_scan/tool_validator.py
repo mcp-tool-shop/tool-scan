@@ -163,7 +163,7 @@ class MCPToolValidator:
         strict_mode: bool = True,
         check_security: bool = True,
         check_schema: bool = True,
-        custom_validators: list[Callable[[MCPToolDefinition], list[ValidationIssue]]] | None = None,
+        custom_validators: list[Callable[[dict[str, Any]], list[ValidationIssue]]] | None = None,
     ):
         """
         Initialize the validator.
@@ -185,7 +185,7 @@ class MCPToolValidator:
             for pattern, name in self.DANGEROUS_DESCRIPTION_PATTERNS
         ]
 
-    def validate(self, tool: MCPToolDefinition) -> ValidationResult:
+    def validate(self, tool: dict[str, Any]) -> ValidationResult:
         """
         Validate an MCP tool definition.
 
@@ -244,7 +244,7 @@ class MCPToolValidator:
             },
         )
 
-    def _validate_name(self, tool: MCPToolDefinition) -> list[ValidationIssue]:
+    def _validate_name(self, tool: dict[str, Any]) -> list[ValidationIssue]:
         """Validate tool name requirements."""
         issues = []
         name = tool.get("name")
@@ -310,7 +310,7 @@ class MCPToolValidator:
 
         return issues
 
-    def _validate_description(self, tool: MCPToolDefinition) -> list[ValidationIssue]:
+    def _validate_description(self, tool: dict[str, Any]) -> list[ValidationIssue]:
         """Validate tool description requirements."""
         issues = []
         description = tool.get("description")
@@ -366,7 +366,7 @@ class MCPToolValidator:
 
         return issues
 
-    def _validate_input_schema(self, tool: MCPToolDefinition) -> list[ValidationIssue]:
+    def _validate_input_schema(self, tool: dict[str, Any]) -> list[ValidationIssue]:
         """Validate the inputSchema according to JSON Schema standards."""
         issues = []
         schema = tool.get("inputSchema")
@@ -551,7 +551,7 @@ class MCPToolValidator:
 
         return issues
 
-    def _validate_annotations(self, tool: MCPToolDefinition) -> list[ValidationIssue]:
+    def _validate_annotations(self, tool: dict[str, Any]) -> list[ValidationIssue]:
         """Validate tool annotations (MCP 2025-11-25 spec)."""
         issues = []
         annotations = tool.get("annotations")
@@ -616,9 +616,9 @@ class MCPToolValidator:
 
         return issues
 
-    def _scan_security(self, tool: MCPToolDefinition) -> list[ValidationIssue]:
+    def _scan_security(self, tool: dict[str, Any]) -> list[ValidationIssue]:
         """Scan for security vulnerabilities."""
-        issues = []
+        issues: list[ValidationIssue] = []
 
         # Check for command injection patterns in schema defaults
         schema = tool.get("inputSchema") or {}
@@ -709,7 +709,7 @@ class MCPToolValidator:
 
         return max(0.0, score)
 
-    def validate_batch(self, tools: list[MCPToolDefinition]) -> dict[str, ValidationResult]:
+    def validate_batch(self, tools: list[dict[str, Any]]) -> dict[str, ValidationResult]:
         """
         Validate multiple tools at once.
 

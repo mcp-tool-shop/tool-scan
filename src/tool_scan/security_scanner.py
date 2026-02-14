@@ -726,7 +726,7 @@ class SecurityScanner:
         Tool poisoning is a 2025/2026 attack vector where malicious
         instructions are hidden in tool descriptions to manipulate AI behavior.
         """
-        threats = []
+        threats: list[SecurityThreat] = []
 
         if not description:
             return threats

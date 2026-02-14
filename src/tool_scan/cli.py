@@ -52,7 +52,7 @@ class Colors:
     CYAN = "\033[96m"
 
     @classmethod
-    def disable(cls):
+    def disable(cls) -> None:
         """Disable colors for non-TTY output."""
         cls.RESET = ""
         cls.BOLD = ""
@@ -192,14 +192,16 @@ def print_summary_table(reports: dict[str, GradeReport]) -> None:
 def load_tool(path: str) -> dict[str, Any]:
     """Load a tool definition from a file or stdin."""
     if path == "-":
-        return json.load(sys.stdin)
+        data: Any = json.load(sys.stdin)
+        return data  # type: ignore[no-any-return]
 
     file_path = Path(path)
     if not file_path.exists():
         raise FileNotFoundError(f"File not found: {path}")
 
     with open(file_path) as f:
-        return json.load(f)
+        data = json.load(f)
+        return data  # type: ignore[no-any-return]
 
 
 def main(args: list[str] | None = None) -> int:
