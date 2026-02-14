@@ -7,7 +7,6 @@ from pathlib import Path
 
 from tool_scan import grade_tool
 
-
 SCHEMA_PATH = Path(__file__).resolve().parent.parent / "docs" / "report.schema.json"
 
 REQUIRED_TOP_KEYS = {

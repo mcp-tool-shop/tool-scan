@@ -1,12 +1,7 @@
 from __future__ import annotations
 
-from unittest.mock import MagicMock
-
-import pytest
-
-from tool_scan.security_scanner import SecurityScanner
 from tool_scan.grader import MCPToolGrader
-
+from tool_scan.security_scanner import SecurityScanner
 
 # =============================================================================
 # P0: Ensure no regex compilation occurs during scans

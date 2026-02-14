@@ -14,15 +14,9 @@ Tests covering:
 from __future__ import annotations
 
 import time
-from typing import Any
 
-import pytest
-
-from tool_scan.compliance_checker import ComplianceChecker
 from tool_scan.grader import MCPToolGrader
 from tool_scan.security_scanner import SecurityScanner, ThreatCategory
-from tool_scan.tool_validator import MCPToolValidator
-
 
 # =============================================================================
 # 1. MCP Specification Compliance (4 tests)
