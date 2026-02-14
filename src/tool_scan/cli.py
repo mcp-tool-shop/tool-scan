@@ -38,6 +38,8 @@ from pathlib import Path
 from typing import Any
 
 from .grader import Grade, GradeReport, MCPToolGrader
+from .junit import grade_reports_to_junit
+from .sarif import reports_to_sarif
 
 
 # ANSI color codes
@@ -204,6 +206,65 @@ def load_tool(path: str) -> dict[str, Any]:
         return data  # type: ignore[no-any-return]
 
 
+def _render_output(
+    fmt: str,
+    reports: dict[str, GradeReport],
+    errors: list[str],
+    parsed: argparse.Namespace,
+) -> str:
+    """Render reports in the requested format.
+
+    Returns the formatted string.  For ``text`` format the output is
+    printed directly (side-effect) and an empty string is returned so
+    the caller doesn't double-print.
+    """
+    if fmt == "json":
+        output = {
+            "results": {name: report.json_report for name, report in reports.items()},
+            "summary": {
+                "total": len(reports),
+                "passed": sum(
+                    1 for r in reports.values() if r.score >= parsed.min_score and r.is_safe
+                ),
+                "failed": sum(
+                    1 for r in reports.values() if r.score < parsed.min_score or not r.is_safe
+                ),
+                "average_score": sum(r.score for r in reports.values()) / len(reports)
+                if reports
+                else 0,
+            },
+            "errors": errors,
+        }
+        return json.dumps(output, indent=2)
+
+    if fmt == "sarif":
+        sarif = reports_to_sarif(reports)
+        return json.dumps(sarif, indent=2)
+
+    if fmt == "junit":
+        return grade_reports_to_junit(
+            reports,
+            min_score=parsed.min_score,
+            fail_on_unsafe=parsed.strict,
+        )
+
+    # Default: text
+    # Text is printed directly for color support; return empty string.
+    if not parsed.out:
+        for report in reports.values():
+            print_report(report, verbose=parsed.verbose)
+        if len(reports) > 1:
+            print_summary_table(reports)
+        return ""
+
+    # When writing text to file, build a plain-text version
+    Colors.disable()
+    lines: list[str] = []
+    for report in reports.values():
+        lines.append(report.summary)
+    return "\n".join(lines)
+
+
 def main(args: list[str] | None = None) -> int:
     """Main entry point."""
     parser = argparse.ArgumentParser(
@@ -212,10 +273,12 @@ def main(args: list[str] | None = None) -> int:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  tool-scan my_tool.json                Scan a single tool
-  tool-scan --json tool.json            Output as JSON
-  tool-scan --strict tools/*.json       Strict mode for CI/CD
-  cat tool.json | tool-scan -           Read from stdin
+  tool-scan my_tool.json                    Scan a single tool
+  tool-scan --format json tool.json         JSON output
+  tool-scan --format sarif -o out.sarif .   SARIF for GitHub Code Scanning
+  tool-scan --format junit -o report.xml .  JUnit XML for CI
+  tool-scan --strict tools/*.json           Strict mode for CI/CD
+  cat tool.json | tool-scan -               Read from stdin
 
 Exit codes:
   0  All tools passed (grade C- or better, no security issues)
@@ -232,10 +295,27 @@ Exit codes:
     )
 
     parser.add_argument(
+        "-f",
+        "--format",
+        choices=["text", "json", "sarif", "junit"],
+        default=None,
+        metavar="FMT",
+        help="Output format: text (default), json, sarif, junit",
+    )
+
+    parser.add_argument(
+        "-o",
+        "--out",
+        metavar="FILE",
+        default=None,
+        help="Write output to FILE instead of stdout",
+    )
+
+    parser.add_argument(
         "-j",
         "--json",
         action="store_true",
-        help="Output results as JSON",
+        help="Output results as JSON (shorthand for --format json)",
     )
 
     parser.add_argument(
@@ -315,33 +395,17 @@ Exit codes:
         if not reports:
             return 2
 
-    # Output results
-    if parsed.json:
-        output = {
-            "results": {name: report.json_report for name, report in reports.items()},
-            "summary": {
-                "total": len(reports),
-                "passed": sum(
-                    1 for r in reports.values() if r.score >= parsed.min_score and r.is_safe
-                ),
-                "failed": sum(
-                    1 for r in reports.values() if r.score < parsed.min_score or not r.is_safe
-                ),
-                "average_score": sum(r.score for r in reports.values()) / len(reports)
-                if reports
-                else 0,
-            },
-            "errors": errors,
-        }
-        print(json.dumps(output, indent=2))
-    else:
-        # Print individual reports
-        for report in reports.values():
-            print_report(report, verbose=parsed.verbose)
+    # Resolve output format (--json is shorthand for --format json)
+    fmt = parsed.format or ("json" if parsed.json else "text")
 
-        # Print summary if multiple tools
-        if len(reports) > 1:
-            print_summary_table(reports)
+    # Generate output string
+    output_text = _render_output(fmt, reports, errors, parsed)
+
+    # Write to file or stdout
+    if parsed.out:
+        Path(parsed.out).write_text(output_text, encoding="utf-8")
+    elif output_text:
+        print(output_text)
 
     # Determine exit code
     failed = any(

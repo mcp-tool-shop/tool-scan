@@ -47,7 +47,12 @@ tool-scan my_tool.json
 # Scan with strict mode (CI/CD)
 tool-scan --strict --min-score 80 tools/*.json
 
-# JSON output for automation
+# Output formats: text (default), json, sarif, junit
+tool-scan --format json my_tool.json > report.json
+tool-scan --format sarif -o results.sarif tools/*.json
+tool-scan --format junit -o results.xml tools/*.json
+
+# Shorthand for JSON
 tool-scan --json my_tool.json > report.json
 ```
 
@@ -237,17 +242,27 @@ jobs:
 
       - name: Scan MCP Tools
         run: |
-          tool-scan \
-            --strict \
-            --min-score 80 \
-            --json \
-            tools/*.json > scan-report.json
+          tool-scan --strict --min-score 80 \
+            --format sarif -o results.sarif \
+            tools/*.json
 
-      - name: Upload Report
-        uses: actions/upload-artifact@v4
+      - name: Upload SARIF to GitHub Code Scanning
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
         with:
-          name: scan-report
-          path: scan-report.json
+          sarif_file: results.sarif
+
+      - name: JUnit report (optional)
+        run: |
+          tool-scan --format junit -o results.xml tools/*.json
+        if: always()
+
+      - name: Upload JUnit
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: results.xml
 ```
 
 ### Pre-commit Hook
