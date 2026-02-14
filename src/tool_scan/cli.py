@@ -428,6 +428,13 @@ Exit codes:
         help="Exit 1 only for new findings (requires --baseline)",
     )
 
+    parser.add_argument(
+        "--rules-dir",
+        metavar="DIR",
+        default=None,
+        help="Load custom rule plugins from DIR (*.py files with get_rules())",
+    )
+
     parsed = parser.parse_args(args)
 
     # Load config file (explicit path or auto-discover)
@@ -444,10 +451,23 @@ Exit codes:
     if parsed.no_color or not sys.stdout.isatty():
         Colors.disable()
 
+    # Load plugin rules
+    plugin_rules = None
+    if parsed.rules_dir:
+        from .rules.plugin_loader import PluginLoader, PluginLoadError
+
+        try:
+            loader = PluginLoader(parsed.rules_dir)
+            plugin_rules = loader.load()
+        except PluginLoadError as e:
+            print(f"Error loading rules: {e}", file=sys.stderr)
+            return 2
+
     # Initialize grader
     grader = MCPToolGrader(
         strict_security=parsed.strict,
         include_optional_checks=parsed.include_optional,
+        plugin_rules=plugin_rules,
     )
 
     # Load and grade tools

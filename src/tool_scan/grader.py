@@ -26,6 +26,8 @@ from typing import Any
 
 from . import __version__
 from .compliance_checker import ComplianceChecker, ComplianceReport, ComplianceStatus
+from .rules import PluginRule
+from .rules import Severity as PluginSeverity
 from .security_scanner import SecurityScanner, SecurityScanResult, ThreatSeverity
 from .tool_validator import MCPToolValidator, ValidationResult, ValidationSeverity
 
@@ -206,10 +208,19 @@ class MCPToolGrader:
     WEIGHT_COMPLIANCE = 0.35
     WEIGHT_QUALITY = 0.25
 
+    # Map plugin severity to remark category
+    _PLUGIN_SEVERITY_MAP: dict[PluginSeverity, RemarkCategory] = {
+        PluginSeverity.CRITICAL: RemarkCategory.CRITICAL,
+        PluginSeverity.HIGH: RemarkCategory.SECURITY,
+        PluginSeverity.MEDIUM: RemarkCategory.SECURITY,
+        PluginSeverity.LOW: RemarkCategory.QUALITY,
+    }
+
     def __init__(
         self,
         strict_security: bool = True,
         include_optional_checks: bool = False,
+        plugin_rules: list[PluginRule] | None = None,
     ):
         """
         Initialize the grader.
@@ -217,9 +228,11 @@ class MCPToolGrader:
         Args:
             strict_security: Fail on any high/critical security issues
             include_optional_checks: Include enterprise-level optional checks
+            plugin_rules: Custom rules from plugin loader
         """
         self.strict_security = strict_security
         self.include_optional_checks = include_optional_checks
+        self.plugin_rules: list[PluginRule] = plugin_rules or []
 
         # Initialize validators
         self.validator = MCPToolValidator(strict_mode=False, check_security=True)
@@ -247,6 +260,9 @@ class MCPToolGrader:
         validation_result = self.validator.validate(tool)
         security_result = self.security.scan(tool)
         compliance_result = self.compliance.check(tool)
+
+        # Run plugin rules
+        self._run_plugin_rules(tool, remarks)
 
         # Calculate component scores
         security_score = self._calculate_security_score(security_result, remarks)
@@ -421,6 +437,36 @@ class MCPToolGrader:
             )
 
         return score
+
+    def _run_plugin_rules(
+        self,
+        tool: dict[str, Any],
+        remarks: list[Remark],
+    ) -> None:
+        """Execute plugin rules and add their findings to remarks."""
+        for rule in self.plugin_rules:
+            try:
+                findings = rule.check(tool)
+            except Exception:
+                # Plugin errors should not crash the scan
+                continue
+
+            category = self._PLUGIN_SEVERITY_MAP.get(
+                rule.severity, RemarkCategory.QUALITY
+            )
+
+            for finding in findings:
+                remarks.append(
+                    Remark(
+                        category=category,
+                        title=rule.title,
+                        description=finding.message,
+                        rule_id=rule.rule_id,
+                        cwe_id=rule.cwe_id,
+                        owasp_id=rule.owasp_id,
+                        snippet=finding.snippet,
+                    )
+                )
 
     def grade_batch(self, tools: list[dict[str, Any]]) -> dict[str, GradeReport]:
         """
