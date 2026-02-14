@@ -1,0 +1,24 @@
+cff-version: 1.2.0
+title: Tool Scan
+message: >-
+  If you use this software, please cite it using the
+  metadata from this file.
+type: software
+authors:
+  - name: MCP Tool Shop
+    website: https://github.com/mcp-tool-shop-org
+repository-code: https://github.com/mcp-tool-shop-org/tool-scan
+url: https://github.com/mcp-tool-shop-org/tool-scan
+abstract: >-
+  Security scanner for MCP (Model Context Protocol) tools.
+  Detects tool poisoning, prompt injection, data exfiltration,
+  and command injection in tool descriptions and configurations.
+keywords:
+  - mcp
+  - security
+  - scanner
+  - prompt-injection
+  - tool-poisoning
+license: MIT
+version: 1.0.1
+date-released: '2026-02-14'
