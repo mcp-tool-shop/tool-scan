@@ -39,6 +39,7 @@ from typing import Any
 
 from .baseline import BaselineFile, compare_with_baseline, load_baseline, save_baseline
 from .config import ToolScanConfig, load_config
+from .discovery import discover_files
 from .grader import Grade, GradeReport, MCPToolGrader, Remark
 from .junit import grade_reports_to_junit
 from .profile import ScanProfiler
@@ -194,9 +195,10 @@ def print_summary_table(reports: dict[str, GradeReport]) -> None:
     print()
 
 
-def load_tool(path: str) -> dict[str, Any]:
+def load_tool(path: str | Path) -> dict[str, Any]:
     """Load a tool definition from a file or stdin."""
-    if path == "-":
+    path_str = str(path)
+    if path_str == "-":
         data: Any = json.load(sys.stdin)
         return data  # type: ignore[no-any-return]
 
@@ -442,6 +444,22 @@ Exit codes:
         help="Print per-stage timing breakdown (for large-repo performance analysis)",
     )
 
+    parser.add_argument(
+        "--include",
+        action="append",
+        metavar="GLOB",
+        default=None,
+        help="Include files matching GLOB when scanning directories (default: *.json). Repeatable.",
+    )
+
+    parser.add_argument(
+        "--exclude",
+        action="append",
+        metavar="GLOB",
+        default=None,
+        help="Exclude files/dirs matching GLOB when scanning directories. Repeatable.",
+    )
+
     parsed = parser.parse_args(args)
 
     # Load config file (explicit path or auto-discover)
@@ -482,11 +500,22 @@ Exit codes:
         plugin_rules=plugin_rules,
     )
 
+    # Discover files (expand directories, apply include/exclude globs)
+    resolved_files = discover_files(
+        paths=parsed.files,
+        include=parsed.include,
+        exclude=parsed.exclude,
+    )
+
+    if not resolved_files:
+        print("No tool files found. Use --include to change file patterns.", file=sys.stderr)
+        return 2
+
     # Load and grade tools
     reports: dict[str, GradeReport] = {}
     errors: list[str] = []
 
-    for file_path in parsed.files:
+    for file_path in resolved_files:
         try:
             with profiler.stage("load"):
                 tool = load_tool(file_path)
@@ -498,7 +527,7 @@ Exit codes:
                     with profiler.stage("grade"):
                         reports[name] = grader.grade(t)
             else:
-                name = tool.get("name", Path(file_path).stem if file_path != "-" else "stdin")
+                name = tool.get("name", file_path.stem if str(file_path) != "-" else "stdin")
                 with profiler.stage("grade"):
                     reports[name] = grader.grade(tool)
 

@@ -34,6 +34,7 @@ from .compliance_checker import (
     ComplianceStatus,
 )
 from .config import ToolScanConfig, load_config
+from .discovery import discover_files
 from .grader import Grade, GradeReport, MCPToolGrader, Remark, RemarkCategory, grade_tool
 from .profile import ProfileResult, ScanProfiler, StageResult
 from .schema_validator import SchemaDialect, SchemaIssue, SchemaValidator
@@ -73,6 +74,8 @@ __all__ = [
     # Config
     "ToolScanConfig",
     "load_config",
+    # Discovery
+    "discover_files",
     # Profiler
     "ScanProfiler",
     "ProfileResult",
