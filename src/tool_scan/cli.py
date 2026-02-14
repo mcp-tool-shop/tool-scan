@@ -37,7 +37,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from .grader import Grade, GradeReport, MCPToolGrader
+from .config import ToolScanConfig, load_config
+from .grader import Grade, GradeReport, MCPToolGrader, Remark
 from .junit import grade_reports_to_junit
 from .sarif import reports_to_sarif
 
@@ -265,6 +266,52 @@ def _render_output(
     return "\n".join(lines)
 
 
+def _apply_config(parsed: argparse.Namespace, cfg: ToolScanConfig) -> None:
+    """Merge config-file defaults into the parsed CLI namespace.
+
+    CLI flags take precedence: if the user passed ``--strict`` on the
+    command line, the config-file ``strict = false`` is ignored.  We
+    detect "user-provided" by checking argparse defaults.
+    """
+    # min_score: CLI default is 70 — only override if user didn't pass it
+    if parsed.min_score == 70 and cfg.min_score != 70:
+        parsed.min_score = cfg.min_score
+
+    # strict: CLI default is False
+    if not parsed.strict and cfg.strict:
+        parsed.strict = True
+
+    # include_optional: CLI default is False
+    if not parsed.include_optional and cfg.include_optional:
+        parsed.include_optional = True
+
+    # Stash the full config on the namespace for downstream use
+    parsed.cfg = cfg
+
+
+def _apply_ignores(report: GradeReport, cfg: ToolScanConfig) -> GradeReport:
+    """Remove findings matching the config's ignore lists.
+
+    Returns the report with suppressed remarks stripped out.
+    Suppressed count is stored in the report for audit trail.
+    """
+    if not cfg.has_ignores:
+        return report
+
+    kept: list[Remark] = []
+    suppressed = 0
+    for remark in report.remarks:
+        # Check rule_id ignore
+        if remark.rule_id and remark.rule_id in cfg.ignore_rules:
+            suppressed += 1
+            continue
+        kept.append(remark)
+
+    report.remarks = kept
+    report.suppressed_count = suppressed
+    return report
+
+
 def main(args: list[str] | None = None) -> int:
     """Main entry point."""
     parser = argparse.ArgumentParser(
@@ -352,7 +399,25 @@ Exit codes:
         help="Include optional enterprise checks",
     )
 
+    parser.add_argument(
+        "-c",
+        "--config",
+        metavar="PATH",
+        default=None,
+        help="Config file (.tool-scan.toml, .tool-scan.json, or pyproject.toml)",
+    )
+
     parsed = parser.parse_args(args)
+
+    # Load config file (explicit path or auto-discover)
+    try:
+        cfg = load_config(parsed.config)
+    except (FileNotFoundError, ValueError, RuntimeError) as e:
+        print(f"Error loading config: {e}", file=sys.stderr)
+        return 2
+
+    # Apply config defaults — CLI flags take precedence
+    _apply_config(parsed, cfg)
 
     # Disable colors if requested or not a TTY
     if parsed.no_color or not sys.stdout.isatty():
@@ -387,6 +452,10 @@ Exit codes:
             errors.append(str(e))
         except Exception as e:
             errors.append(f"Error processing {file_path}: {e}")
+
+    # Apply config ignore rules to each report
+    for name in list(reports):
+        reports[name] = _apply_ignores(reports[name], cfg)
 
     # Output errors
     if errors:

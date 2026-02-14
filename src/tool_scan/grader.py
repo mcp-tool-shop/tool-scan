@@ -113,6 +113,7 @@ class GradeReport:
     validation_result: ValidationResult | None = None
     security_result: SecurityScanResult | None = None
     compliance_result: ComplianceReport | None = None
+    suppressed_count: int = 0
 
     @property
     def summary(self) -> str:
@@ -183,6 +184,7 @@ class GradeReport:
                 "quality_issues": len(
                     [r for r in self.remarks if r.category == RemarkCategory.QUALITY]
                 ),
+                "suppressed": self.suppressed_count,
             },
         }
 

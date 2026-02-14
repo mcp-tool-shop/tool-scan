@@ -33,6 +33,7 @@ from .compliance_checker import (
     ComplianceReport,
     ComplianceStatus,
 )
+from .config import ToolScanConfig, load_config
 from .grader import Grade, GradeReport, MCPToolGrader, Remark, RemarkCategory, grade_tool
 from .schema_validator import SchemaDialect, SchemaIssue, SchemaValidator
 from .security_scanner import (
@@ -68,6 +69,9 @@ __all__ = [
     "ComplianceCheck",
     "ComplianceLevel",
     "ComplianceStatus",
+    # Config
+    "ToolScanConfig",
+    "load_config",
     # Grader (main entry point)
     "MCPToolGrader",
     "GradeReport",

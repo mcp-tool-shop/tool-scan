@@ -28,6 +28,7 @@ REQUIRED_SUMMARY_KEYS = {
     "security_issues",
     "compliance_issues",
     "quality_issues",
+    "suppressed",
 }
 
 ALLOWED_REMARK_KEYS = {
