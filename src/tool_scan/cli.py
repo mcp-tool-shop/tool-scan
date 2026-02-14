@@ -123,10 +123,9 @@ def print_report(report: GradeReport, verbose: bool = False) -> None:
     # Remarks
     if report.remarks:
         print(f"  {Colors.BOLD}Remarks ({len(report.remarks)}):{Colors.RESET}")
-        displayed = 0
         max_display = 20 if verbose else 5
 
-        for remark in report.remarks:
+        for displayed, remark in enumerate(report.remarks):
             if displayed >= max_display:
                 remaining = len(report.remarks) - displayed
                 print(f"    {Colors.CYAN}... and {remaining} more (use --verbose){Colors.RESET}")
@@ -145,7 +144,6 @@ def print_report(report: GradeReport, verbose: bool = False) -> None:
             print(f"    {color}{remark.category.value}{Colors.RESET}: {remark.title}")
             if verbose and remark.action:
                 print(f"      → {remark.action}")
-            displayed += 1
     else:
         print(f"  {Colors.GREEN}No issues found - Tool is ready for production!{Colors.RESET}")
 
