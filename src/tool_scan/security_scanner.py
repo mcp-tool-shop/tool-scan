@@ -65,6 +65,7 @@ class SecurityThreat:
     cwe_id: str | None = None  # Common Weakness Enumeration ID
     owasp_id: str | None = None  # OWASP Top 10 ID
     rule_id: str | None = None  # Stable rule identifier (e.g. TS-INJ-001)
+    snippet: str | None = None  # Context window around the match
 
     def __str__(self) -> str:
         prefix = f"[{self.rule_id}] " if self.rule_id else ""
@@ -150,6 +151,83 @@ class SecurityScanner:
     - Tool text is collected and normalized once per scan
     - No repeated .lower() calls inside inner loops
     """
+
+    # CWE and OWASP mappings keyed by rule_id
+    RULE_CWE_OWASP: dict[str, tuple[str, str]] = {
+        # Prompt injection — CWE-77 (command injection generalised) / OWASP LLM01
+        "TS-INJ-001": ("CWE-77", "OWASP-LLM01"),
+        "TS-INJ-002": ("CWE-77", "OWASP-LLM01"),
+        "TS-INJ-003": ("CWE-77", "OWASP-LLM01"),
+        "TS-INJ-004": ("CWE-77", "OWASP-LLM01"),
+        "TS-INJ-005": ("CWE-77", "OWASP-LLM01"),
+        "TS-INJ-006": ("CWE-77", "OWASP-LLM01"),
+        "TS-INJ-007": ("CWE-284", "OWASP-LLM01"),
+        "TS-INJ-008": ("CWE-284", "OWASP-LLM01"),
+        "TS-INJ-009": ("CWE-77", "OWASP-LLM01"),
+        "TS-INJ-010": ("CWE-77", "OWASP-LLM01"),
+        "TS-INJ-011": ("CWE-451", "OWASP-LLM01"),
+        "TS-INJ-012": ("CWE-451", "OWASP-LLM01"),
+        "TS-INJ-013": ("CWE-77", "OWASP-LLM01"),
+        "TS-INJ-014": ("CWE-77", "OWASP-LLM01"),
+        # Command injection — CWE-78 / OWASP A03
+        "TS-CMD-001": ("CWE-78", "OWASP-A03"),
+        "TS-CMD-002": ("CWE-78", "OWASP-A03"),
+        "TS-CMD-003": ("CWE-78", "OWASP-A03"),
+        "TS-CMD-004": ("CWE-78", "OWASP-A03"),
+        "TS-CMD-005": ("CWE-78", "OWASP-A03"),
+        "TS-CMD-006": ("CWE-78", "OWASP-A03"),
+        "TS-CMD-007": ("CWE-78", "OWASP-A03"),
+        "TS-CMD-008": ("CWE-78", "OWASP-A03"),
+        "TS-CMD-009": ("CWE-78", "OWASP-A03"),
+        "TS-CMD-010": ("CWE-94", "OWASP-A03"),
+        "TS-CMD-011": ("CWE-78", "OWASP-A03"),
+        # SQL injection — CWE-89 / OWASP A03
+        "TS-SQL-001": ("CWE-89", "OWASP-A03"),
+        "TS-SQL-002": ("CWE-89", "OWASP-A03"),
+        "TS-SQL-003": ("CWE-89", "OWASP-A03"),
+        "TS-SQL-004": ("CWE-89", "OWASP-A03"),
+        "TS-SQL-005": ("CWE-89", "OWASP-A03"),
+        "TS-SQL-006": ("CWE-89", "OWASP-A03"),
+        # XSS — CWE-79 / OWASP A03
+        "TS-XSS-001": ("CWE-79", "OWASP-A03"),
+        "TS-XSS-002": ("CWE-79", "OWASP-A03"),
+        "TS-XSS-003": ("CWE-79", "OWASP-A03"),
+        "TS-XSS-004": ("CWE-79", "OWASP-A03"),
+        "TS-XSS-005": ("CWE-79", "OWASP-A03"),
+        "TS-XSS-006": ("CWE-79", "OWASP-A03"),
+        "TS-XSS-007": ("CWE-79", "OWASP-A03"),
+        "TS-XSS-008": ("CWE-79", "OWASP-A03"),
+        # Path traversal — CWE-22 / OWASP A01
+        "TS-PTR-001": ("CWE-22", "OWASP-A01"),
+        "TS-PTR-002": ("CWE-22", "OWASP-A01"),
+        "TS-PTR-003": ("CWE-22", "OWASP-A01"),
+        "TS-PTR-004": ("CWE-22", "OWASP-A01"),
+        "TS-PTR-005": ("CWE-22", "OWASP-A01"),
+        "TS-PTR-006": ("CWE-22", "OWASP-A01"),
+        # Data exfiltration — CWE-200 / OWASP A01
+        "TS-EXF-001": ("CWE-200", "OWASP-A01"),
+        "TS-EXF-002": ("CWE-200", "OWASP-A01"),
+        "TS-EXF-003": ("CWE-200", "OWASP-A01"),
+        "TS-EXF-004": ("CWE-200", "OWASP-A01"),
+        "TS-EXF-005": ("CWE-200", "OWASP-A01"),
+        # SSRF — CWE-918 / OWASP A10
+        "TS-SSR-001": ("CWE-918", "OWASP-A10"),
+        "TS-SSR-002": ("CWE-918", "OWASP-A10"),
+        "TS-SSR-003": ("CWE-918", "OWASP-A10"),
+        "TS-SSR-004": ("CWE-918", "OWASP-A10"),
+        "TS-SSR-005": ("CWE-918", "OWASP-A10"),
+        "TS-SSR-006": ("CWE-918", "OWASP-A10"),
+        "TS-SSR-007": ("CWE-918", "OWASP-A10"),
+        "TS-SSR-008": ("CWE-918", "OWASP-A10"),
+        # Tool poisoning heuristics — CWE-77 / OWASP-LLM01
+        "TS-PSN-001": ("CWE-77", "OWASP-LLM01"),
+        "TS-PSN-002": ("CWE-116", "OWASP-LLM01"),
+        "TS-PSN-003": ("CWE-116", "OWASP-LLM01"),
+        "TS-PSN-004": ("CWE-77", "OWASP-LLM01"),
+        # Encoding — CWE-116 / OWASP A03
+        "TS-ENC-001": ("CWE-116", "OWASP-A03"),
+        "TS-ENC-002": ("CWE-116", "OWASP-A03"),
+    }
 
     # Prompt injection patterns - tool poisoning via descriptions
     # Tuples: (regex, title, severity, rule_id)
@@ -378,6 +456,7 @@ class SecurityScanner:
             if not enabled:
                 continue
             for regex, title, severity, rule_id in source_patterns:
+                cwe_id, owasp_id = self.RULE_CWE_OWASP.get(rule_id, (None, None))
                 patterns.append(
                     ThreatPattern(
                         pattern=re.compile(regex, re.IGNORECASE),
@@ -386,6 +465,8 @@ class SecurityScanner:
                         title=title,
                         description=f"Detected {title.lower()}",
                         rule_id=rule_id,
+                        cwe_id=cwe_id,
+                        owasp_id=owasp_id,
                     )
                 )
 
@@ -542,6 +623,9 @@ class SecurityScanner:
             },
         )
 
+    # Characters of context to include on each side of a matched snippet
+    _SNIPPET_CONTEXT = 40
+
     def _scan_normalized_blob(self, blob: NormalizedText) -> list[SecurityThreat]:
         """Scan a pre-normalized text blob for threats."""
         threats = []
@@ -550,6 +634,7 @@ class SecurityScanner:
             # Patterns are compiled with re.IGNORECASE, so search original
             match = threat_pattern.pattern.search(blob.original)
             if match:
+                snippet = self._build_snippet(blob.original, match)
                 threats.append(
                     SecurityThreat(
                         category=threat_pattern.category,
@@ -562,10 +647,21 @@ class SecurityScanner:
                         cwe_id=threat_pattern.cwe_id,
                         owasp_id=threat_pattern.owasp_id,
                         rule_id=threat_pattern.rule_id,
+                        snippet=snippet,
                     )
                 )
 
         return threats
+
+    @classmethod
+    def _build_snippet(cls, text: str, match: re.Match[str]) -> str:
+        """Build a context snippet around a regex match."""
+        ctx = cls._SNIPPET_CONTEXT
+        start = max(0, match.start() - ctx)
+        end = min(len(text), match.end() + ctx)
+        prefix = "..." if start > 0 else ""
+        suffix = "..." if end < len(text) else ""
+        return f"{prefix}{text[start:end]}{suffix}"
 
     @staticmethod
     def _deduplicate_threats(threats: list[SecurityThreat]) -> list[SecurityThreat]:
@@ -629,6 +725,7 @@ class SecurityScanner:
         if word_count > 0:
             instruction_density = instruction_count / word_count
             if instruction_density > 0.15:  # More than 15% instruction words
+                cwe, owasp = self.RULE_CWE_OWASP.get("TS-PSN-001", (None, None))
                 threats.append(
                     SecurityThreat(
                         category=ThreatCategory.TOOL_POISONING,
@@ -638,12 +735,15 @@ class SecurityScanner:
                         location=location,
                         mitigation="Review description for hidden behavioral instructions",
                         rule_id="TS-PSN-001",
+                        cwe_id=cwe,
+                        owasp_id=owasp,
                     )
                 )
 
         # Check for hidden unicode characters
         for char in self._INVISIBLE_CHARS:
             if char in description:
+                cwe, owasp = self.RULE_CWE_OWASP.get("TS-PSN-002", (None, None))
                 threats.append(
                     SecurityThreat(
                         category=ThreatCategory.TOOL_POISONING,
@@ -654,12 +754,15 @@ class SecurityScanner:
                         matched_content=f"U+{ord(char):04X}",
                         mitigation="Remove invisible characters that may hide malicious content",
                         rule_id="TS-PSN-002",
+                        cwe_id=cwe,
+                        owasp_id=owasp,
                     )
                 )
 
         # Check for homoglyph attacks
         for homoglyph, latin in self._HOMOGLYPHS.items():
             if homoglyph in description:
+                cwe, owasp = self.RULE_CWE_OWASP.get("TS-PSN-003", (None, None))
                 threats.append(
                     SecurityThreat(
                         category=ThreatCategory.TOOL_POISONING,
@@ -669,12 +772,15 @@ class SecurityScanner:
                         location=location,
                         mitigation="Use only ASCII characters in descriptions",
                         rule_id="TS-PSN-003",
+                        cwe_id=cwe,
+                        owasp_id=owasp,
                     )
                 )
                 break  # Only report once
 
         # Check for excessive length (could hide instructions)
         if len(description) > 2000:
+            cwe, owasp = self.RULE_CWE_OWASP.get("TS-PSN-004", (None, None))
             threats.append(
                 SecurityThreat(
                     category=ThreatCategory.TOOL_POISONING,
@@ -684,6 +790,8 @@ class SecurityScanner:
                     location=location,
                     mitigation="Keep descriptions concise and focused",
                     rule_id="TS-PSN-004",
+                    cwe_id=cwe,
+                    owasp_id=owasp,
                 )
             )
 
@@ -712,6 +820,7 @@ class SecurityScanner:
                         )
                         decoded_threats = self._scan_normalized_blob(decoded_blob)
                         if decoded_threats:
+                            cwe, owasp = self.RULE_CWE_OWASP.get("TS-ENC-001", (None, None))
                             threats.append(
                                 SecurityThreat(
                                     category=ThreatCategory.TOOL_POISONING,
@@ -721,6 +830,8 @@ class SecurityScanner:
                                     location=location,
                                     mitigation="Remove or validate all encoded content",
                                     rule_id="TS-ENC-001",
+                                    cwe_id=cwe,
+                                    owasp_id=owasp,
                                 )
                             )
                             threats.extend(decoded_threats)
@@ -743,6 +854,7 @@ class SecurityScanner:
                         )
                         decoded_threats = self._scan_normalized_blob(decoded_blob)
                         if decoded_threats:
+                            cwe, owasp = self.RULE_CWE_OWASP.get("TS-ENC-002", (None, None))
                             threats.append(
                                 SecurityThreat(
                                     category=ThreatCategory.TOOL_POISONING,
@@ -752,6 +864,8 @@ class SecurityScanner:
                                     location=location,
                                     mitigation="Remove or validate all encoded content",
                                     rule_id="TS-ENC-002",
+                                    cwe_id=cwe,
+                                    owasp_id=owasp,
                                 )
                             )
                             threats.extend(decoded_threats)
