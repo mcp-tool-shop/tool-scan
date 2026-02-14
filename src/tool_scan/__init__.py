@@ -23,7 +23,7 @@ References:
 - MCP Security Best Practices (2026)
 """
 
-__version__ = "1.0.0"
+__version__ = "1.1.1"
 __author__ = "MCP Tool Shop"
 
 from .compliance_checker import (
@@ -33,7 +33,10 @@ from .compliance_checker import (
     ComplianceReport,
     ComplianceStatus,
 )
+from .config import ToolScanConfig, load_config
+from .discovery import discover_files
 from .grader import Grade, GradeReport, MCPToolGrader, Remark, RemarkCategory, grade_tool
+from .profile import ProfileResult, ScanProfiler, StageResult
 from .schema_validator import SchemaDialect, SchemaIssue, SchemaValidator
 from .security_scanner import (
     SecurityScanner,
@@ -68,6 +71,15 @@ __all__ = [
     "ComplianceCheck",
     "ComplianceLevel",
     "ComplianceStatus",
+    # Config
+    "ToolScanConfig",
+    "load_config",
+    # Discovery
+    "discover_files",
+    # Profiler
+    "ScanProfiler",
+    "ProfileResult",
+    "StageResult",
     # Grader (main entry point)
     "MCPToolGrader",
     "GradeReport",

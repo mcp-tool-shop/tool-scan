@@ -24,9 +24,16 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
+from . import __version__
 from .compliance_checker import ComplianceChecker, ComplianceReport, ComplianceStatus
+from .rules import PluginRule
+from .rules import Severity as PluginSeverity
 from .security_scanner import SecurityScanner, SecurityScanResult, ThreatSeverity
 from .tool_validator import MCPToolValidator, ValidationResult, ValidationSeverity
+
+# Versioning for the JSON report envelope
+REPORT_FORMAT_VERSION = "1.0.0"
+RULESET_VERSION = "2026.1"
 
 
 class Grade(Enum):
@@ -82,6 +89,10 @@ class Remark:
     description: str
     action: str | None = None
     reference: str | None = None
+    rule_id: str | None = None
+    cwe_id: str | None = None
+    owasp_id: str | None = None
+    snippet: str | None = None
 
     def __str__(self) -> str:
         lines = [f"{self.category.value}: {self.title}"]
@@ -104,6 +115,7 @@ class GradeReport:
     validation_result: ValidationResult | None = None
     security_result: SecurityScanResult | None = None
     compliance_result: ComplianceReport | None = None
+    suppressed_count: int = 0
 
     @property
     def summary(self) -> str:
@@ -138,6 +150,9 @@ class GradeReport:
     def json_report(self) -> dict[str, Any]:
         """Generate a JSON-serializable report."""
         return {
+            "report_version": REPORT_FORMAT_VERSION,
+            "tool_scan_version": __version__,
+            "ruleset_version": RULESET_VERSION,
             "tool_name": self.tool_name,
             "score": round(self.score, 1),
             "grade": self.grade.letter,
@@ -151,6 +166,10 @@ class GradeReport:
                     "description": r.description,
                     "action": r.action,
                     "reference": r.reference,
+                    "rule_id": r.rule_id,
+                    "cwe_id": r.cwe_id,
+                    "owasp_id": r.owasp_id,
+                    "snippet": r.snippet,
                 }
                 for r in self.remarks
             ],
@@ -167,6 +186,7 @@ class GradeReport:
                 "quality_issues": len(
                     [r for r in self.remarks if r.category == RemarkCategory.QUALITY]
                 ),
+                "suppressed": self.suppressed_count,
             },
         }
 
@@ -188,10 +208,19 @@ class MCPToolGrader:
     WEIGHT_COMPLIANCE = 0.35
     WEIGHT_QUALITY = 0.25
 
+    # Map plugin severity to remark category
+    _PLUGIN_SEVERITY_MAP: dict[PluginSeverity, RemarkCategory] = {
+        PluginSeverity.CRITICAL: RemarkCategory.CRITICAL,
+        PluginSeverity.HIGH: RemarkCategory.SECURITY,
+        PluginSeverity.MEDIUM: RemarkCategory.SECURITY,
+        PluginSeverity.LOW: RemarkCategory.QUALITY,
+    }
+
     def __init__(
         self,
         strict_security: bool = True,
         include_optional_checks: bool = False,
+        plugin_rules: list[PluginRule] | None = None,
     ):
         """
         Initialize the grader.
@@ -199,9 +228,11 @@ class MCPToolGrader:
         Args:
             strict_security: Fail on any high/critical security issues
             include_optional_checks: Include enterprise-level optional checks
+            plugin_rules: Custom rules from plugin loader
         """
         self.strict_security = strict_security
         self.include_optional_checks = include_optional_checks
+        self.plugin_rules: list[PluginRule] = plugin_rules or []
 
         # Initialize validators
         self.validator = MCPToolValidator(strict_mode=False, check_security=True)
@@ -229,6 +260,9 @@ class MCPToolGrader:
         validation_result = self.validator.validate(tool)
         security_result = self.security.scan(tool)
         compliance_result = self.compliance.check(tool)
+
+        # Run plugin rules
+        self._run_plugin_rules(tool, remarks)
 
         # Calculate component scores
         security_score = self._calculate_security_score(security_result, remarks)
@@ -265,6 +299,19 @@ class MCPToolGrader:
             )
         )
 
+        # Apply inline suppressions from x-tool-scan-ignore
+        suppressed = 0
+        inline_ignores = tool.get("x-tool-scan-ignore", [])
+        if isinstance(inline_ignores, list) and inline_ignores:
+            ignore_set = {str(r) for r in inline_ignores}
+            kept: list[Remark] = []
+            for remark in remarks:
+                if remark.rule_id and remark.rule_id in ignore_set:
+                    suppressed += 1
+                else:
+                    kept.append(remark)
+            remarks = kept
+
         return GradeReport(
             tool_name=tool_name,
             score=final_score,
@@ -275,6 +322,7 @@ class MCPToolGrader:
             validation_result=validation_result,
             security_result=security_result,
             compliance_result=compliance_result,
+            suppressed_count=suppressed,
         )
 
     def _calculate_security_score(
@@ -309,6 +357,10 @@ class MCPToolGrader:
                     description=threat.description,
                     action=threat.mitigation,
                     reference=threat.owasp_id or threat.cwe_id,
+                    rule_id=threat.rule_id,
+                    cwe_id=threat.cwe_id,
+                    owasp_id=threat.owasp_id,
+                    snippet=threat.snippet,
                 )
             )
 
@@ -385,6 +437,36 @@ class MCPToolGrader:
             )
 
         return score
+
+    def _run_plugin_rules(
+        self,
+        tool: dict[str, Any],
+        remarks: list[Remark],
+    ) -> None:
+        """Execute plugin rules and add their findings to remarks."""
+        for rule in self.plugin_rules:
+            try:
+                findings = rule.check(tool)
+            except Exception:
+                # Plugin errors should not crash the scan
+                continue
+
+            category = self._PLUGIN_SEVERITY_MAP.get(
+                rule.severity, RemarkCategory.QUALITY
+            )
+
+            for finding in findings:
+                remarks.append(
+                    Remark(
+                        category=category,
+                        title=rule.title,
+                        description=finding.message,
+                        rule_id=rule.rule_id,
+                        cwe_id=rule.cwe_id,
+                        owasp_id=rule.owasp_id,
+                        snippet=finding.snippet,
+                    )
+                )
 
     def grade_batch(self, tools: list[dict[str, Any]]) -> dict[str, GradeReport]:
         """

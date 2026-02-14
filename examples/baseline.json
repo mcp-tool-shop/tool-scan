@@ -1,0 +1,10 @@
+{
+  "version": "1",
+  "findings": [
+    {
+      "rule_id": "TS-SSR-001",
+      "location": "Detected localhost access",
+      "snippet_hash": "a1b2c3d4"
+    }
+  ]
+}

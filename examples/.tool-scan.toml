@@ -1,0 +1,21 @@
+# Tool-Scan Configuration Example
+# Place as .tool-scan.toml in your project root, or use --config <path>
+
+min_score = 80
+strict = true
+
+[ignore]
+# Suppress specific rules (e.g. known-safe localhost references)
+rules = ["TS-SSR-001"]
+
+# Skip specific tool JSON paths
+# fields = ["inputSchema.properties.url.default"]
+
+[thresholds]
+# Minimum severity to trigger failure: "low", "medium", "high", "critical"
+fail_severity = "high"
+
+[domains]
+# Optional domain allow/deny patterns
+# allow = ["*.example.com", "api.internal.corp"]
+# deny = ["evil.com"]

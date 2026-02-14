@@ -22,6 +22,8 @@ from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import Any, TypedDict
 
+from .security_scanner import SecurityScanner, ThreatSeverity
+
 
 class ValidationSeverity(Enum):
     """Severity levels for validation issues."""
@@ -163,7 +165,7 @@ class MCPToolValidator:
         strict_mode: bool = True,
         check_security: bool = True,
         check_schema: bool = True,
-        custom_validators: list[Callable[[MCPToolDefinition], list[ValidationIssue]]] | None = None,
+        custom_validators: list[Callable[[dict[str, Any]], list[ValidationIssue]]] | None = None,
     ):
         """
         Initialize the validator.
@@ -185,7 +187,7 @@ class MCPToolValidator:
             for pattern, name in self.DANGEROUS_DESCRIPTION_PATTERNS
         ]
 
-    def validate(self, tool: MCPToolDefinition) -> ValidationResult:
+    def validate(self, tool: dict[str, Any]) -> ValidationResult:
         """
         Validate an MCP tool definition.
 
@@ -244,7 +246,7 @@ class MCPToolValidator:
             },
         )
 
-    def _validate_name(self, tool: MCPToolDefinition) -> list[ValidationIssue]:
+    def _validate_name(self, tool: dict[str, Any]) -> list[ValidationIssue]:
         """Validate tool name requirements."""
         issues = []
         name = tool.get("name")
@@ -310,7 +312,7 @@ class MCPToolValidator:
 
         return issues
 
-    def _validate_description(self, tool: MCPToolDefinition) -> list[ValidationIssue]:
+    def _validate_description(self, tool: dict[str, Any]) -> list[ValidationIssue]:
         """Validate tool description requirements."""
         issues = []
         description = tool.get("description")
@@ -366,7 +368,7 @@ class MCPToolValidator:
 
         return issues
 
-    def _validate_input_schema(self, tool: MCPToolDefinition) -> list[ValidationIssue]:
+    def _validate_input_schema(self, tool: dict[str, Any]) -> list[ValidationIssue]:
         """Validate the inputSchema according to JSON Schema standards."""
         issues = []
         schema = tool.get("inputSchema")
@@ -532,23 +534,26 @@ class MCPToolValidator:
 
         # Validate string constraints
         prop_type = schema.get("type")
-        if prop_type == "string":
-            # Check for pattern/format for strings
-            if "pattern" not in schema and "format" not in schema and "enum" not in schema:
-                if "maxLength" not in schema:
-                    issues.append(
-                        ValidationIssue(
-                            code="STRING_NO_CONSTRAINTS",
-                            message=f"String property '{name}' has no validation constraints",
-                            severity=ValidationSeverity.INFO,
-                            field=field_path,
-                            suggestion="Consider adding maxLength, pattern, or format",
-                        )
-                    )
+        if (
+            prop_type == "string"
+            and "pattern" not in schema
+            and "format" not in schema
+            and "enum" not in schema
+            and "maxLength" not in schema
+        ):
+            issues.append(
+                ValidationIssue(
+                    code="STRING_NO_CONSTRAINTS",
+                    message=f"String property '{name}' has no validation constraints",
+                    severity=ValidationSeverity.INFO,
+                    field=field_path,
+                    suggestion="Consider adding maxLength, pattern, or format",
+                )
+            )
 
         return issues
 
-    def _validate_annotations(self, tool: MCPToolDefinition) -> list[ValidationIssue]:
+    def _validate_annotations(self, tool: dict[str, Any]) -> list[ValidationIssue]:
         """Validate tool annotations (MCP 2025-11-25 spec)."""
         issues = []
         annotations = tool.get("annotations")
@@ -613,78 +618,33 @@ class MCPToolValidator:
 
         return issues
 
-    def _scan_security(self, tool: MCPToolDefinition) -> list[ValidationIssue]:
-        """Scan for security vulnerabilities."""
-        issues = []
+    def _scan_security(self, tool: dict[str, Any]) -> list[ValidationIssue]:
+        """Delegate security scanning to SecurityScanner (single source of truth).
 
-        # Check for command injection patterns in schema defaults
-        schema = tool.get("inputSchema") or {}
-        if not isinstance(schema, dict):
-            return issues  # Can't scan non-dict schema
-        properties = schema.get("properties") or {}
+        Converts SecurityScanner threats into ValidationIssues so callers
+        that consume the validator directly still see security findings.
+        """
+        scanner = SecurityScanner()
+        result = scanner.scan(tool)
 
-        dangerous_default_patterns = [
-            (r";\s*\w+", "command_chaining"),
-            (r"\|\s*\w+", "pipe_injection"),
-            (r"`[^`]+`", "backtick_execution"),
-            (r"\$\([^)]+\)", "subshell_execution"),
-            (r">\s*/", "file_redirect"),
-            (r"<\s*/", "file_input"),
-        ]
+        severity_map = {
+            ThreatSeverity.LOW: ValidationSeverity.INFO,
+            ThreatSeverity.MEDIUM: ValidationSeverity.WARNING,
+            ThreatSeverity.HIGH: ValidationSeverity.ERROR,
+            ThreatSeverity.CRITICAL: ValidationSeverity.CRITICAL,
+        }
 
-        for prop_name, prop_schema in properties.items():
-            if not isinstance(prop_schema, dict):
-                continue
-
-            default = prop_schema.get("default", "")
-            if isinstance(default, str):
-                for pattern, vuln_name in dangerous_default_patterns:
-                    if re.search(pattern, default):
-                        issues.append(
-                            ValidationIssue(
-                                code=f"SECURITY_{vuln_name.upper()}",
-                                message=f"Property '{prop_name}' default contains potential {vuln_name}",
-                                severity=ValidationSeverity.CRITICAL,
-                                field=f"inputSchema.properties.{prop_name}.default",
-                                suggestion="Remove shell metacharacters from default values",
-                            )
-                        )
-
-        # Check for potential SSRF in URL-type properties
-        for prop_name, prop_schema in properties.items():
-            if not isinstance(prop_schema, dict):
-                continue
-
-            prop_format = prop_schema.get("format", "")
-            if prop_format in ("uri", "url") and "pattern" not in prop_schema:
-                issues.append(
-                    ValidationIssue(
-                        code="SECURITY_SSRF_RISK",
-                        message=f"URL property '{prop_name}' has no pattern validation",
-                        severity=ValidationSeverity.WARNING,
-                        field=f"inputSchema.properties.{prop_name}",
-                        suggestion="Add pattern to restrict to allowed domains/protocols",
-                    )
+        issues: list[ValidationIssue] = []
+        for threat in result.threats:
+            issues.append(
+                ValidationIssue(
+                    code=f"SECURITY_{threat.category.name}",
+                    message=threat.description,
+                    severity=severity_map.get(threat.severity, ValidationSeverity.WARNING),
+                    field=threat.location,
+                    suggestion=threat.mitigation,
                 )
-
-        # Check for path traversal risks in file-related properties
-        file_property_hints = ["file", "path", "directory", "folder", "location"]
-        for prop_name, prop_schema in properties.items():
-            if not isinstance(prop_schema, dict):
-                continue
-
-            if any(hint in prop_name.lower() for hint in file_property_hints):
-                if "pattern" not in prop_schema:
-                    issues.append(
-                        ValidationIssue(
-                            code="SECURITY_PATH_TRAVERSAL_RISK",
-                            message=f"File path property '{prop_name}' has no pattern validation",
-                            severity=ValidationSeverity.WARNING,
-                            field=f"inputSchema.properties.{prop_name}",
-                            suggestion="Add pattern to prevent path traversal (e.g., reject ../)",
-                        )
-                    )
-
+            )
         return issues
 
     def _calculate_score(self, issues: list[ValidationIssue]) -> float:
@@ -704,7 +664,7 @@ class MCPToolValidator:
 
         return max(0.0, score)
 
-    def validate_batch(self, tools: list[MCPToolDefinition]) -> dict[str, ValidationResult]:
+    def validate_batch(self, tools: list[dict[str, Any]]) -> dict[str, ValidationResult]:
         """
         Validate multiple tools at once.
 

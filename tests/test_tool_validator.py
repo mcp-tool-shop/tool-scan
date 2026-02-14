@@ -296,12 +296,12 @@ class TestMCPToolValidator:
         assert len(critical) > 0
 
     def test_command_injection_default_detected(self, validator, command_injection_default_tool):
-        """Command injection in default value should be detected."""
+        """Command injection in default value should be detected (delegated to SecurityScanner)."""
         result = validator.validate(command_injection_default_tool)
 
         assert not result.is_valid
-        critical = result.critical_issues
-        assert len(critical) > 0
+        security_issues = [i for i in result.issues if "SECURITY" in i.code]
+        assert len(security_issues) > 0
 
     # =========================================================================
     # PROPERTY VALIDATION TESTS

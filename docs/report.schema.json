@@ -1,0 +1,134 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/mcp-tool-shop-org/tool-scan/docs/report.schema.json",
+  "title": "Tool-Scan Report",
+  "description": "JSON output schema for the tool-scan MCP security scanner.",
+  "type": "object",
+  "required": [
+    "report_version",
+    "tool_scan_version",
+    "ruleset_version",
+    "tool_name",
+    "score",
+    "grade",
+    "grade_description",
+    "is_safe",
+    "is_compliant",
+    "remarks",
+    "summary"
+  ],
+  "properties": {
+    "report_version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "description": "Semantic version of the report format."
+    },
+    "tool_scan_version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "description": "Version of the tool-scan package that produced this report."
+    },
+    "ruleset_version": {
+      "type": "string",
+      "description": "Identifier for the rule set used during scanning (e.g. '2026.1')."
+    },
+    "tool_name": {
+      "type": "string",
+      "description": "Name of the scanned MCP tool."
+    },
+    "score": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100,
+      "description": "Composite quality score (0-100)."
+    },
+    "grade": {
+      "type": "string",
+      "description": "Letter grade (A+ through F)."
+    },
+    "grade_description": {
+      "type": "string",
+      "description": "Human-readable grade description."
+    },
+    "is_safe": {
+      "type": "boolean",
+      "description": "True when no HIGH or CRITICAL security threats are found."
+    },
+    "is_compliant": {
+      "type": "boolean",
+      "description": "True when the tool passes all required MCP spec checks."
+    },
+    "remarks": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Remark"
+      },
+      "description": "Ordered list of actionable findings."
+    },
+    "summary": {
+      "type": "object",
+      "required": [
+        "critical_issues",
+        "security_issues",
+        "compliance_issues",
+        "quality_issues"
+      ],
+      "properties": {
+        "critical_issues": { "type": "integer", "minimum": 0 },
+        "security_issues": { "type": "integer", "minimum": 0 },
+        "compliance_issues": { "type": "integer", "minimum": 0 },
+        "quality_issues": { "type": "integer", "minimum": 0 },
+        "suppressed": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false,
+      "description": "Issue counts by category."
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "Remark": {
+      "type": "object",
+      "required": ["category", "title", "description"],
+      "properties": {
+        "category": {
+          "type": "string",
+          "enum": ["CRITICAL", "SECURITY", "COMPLIANCE", "QUALITY", "BEST_PRACTICE", "INFO"],
+          "description": "Remark category."
+        },
+        "title": {
+          "type": "string",
+          "description": "Short title of the finding."
+        },
+        "description": {
+          "type": "string",
+          "description": "Detailed explanation."
+        },
+        "action": {
+          "type": ["string", "null"],
+          "description": "Suggested remediation action."
+        },
+        "reference": {
+          "type": ["string", "null"],
+          "description": "External reference (CWE, OWASP, spec URL)."
+        },
+        "rule_id": {
+          "type": ["string", "null"],
+          "description": "Stable rule identifier (e.g. TS-INJ-001)."
+        },
+        "cwe_id": {
+          "type": ["string", "null"],
+          "description": "CWE identifier (e.g. CWE-78)."
+        },
+        "owasp_id": {
+          "type": ["string", "null"],
+          "description": "OWASP identifier (e.g. OWASP-A03, OWASP-LLM01)."
+        },
+        "snippet": {
+          "type": ["string", "null"],
+          "description": "Context window around the matched content."
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

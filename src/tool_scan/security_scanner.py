@@ -64,9 +64,12 @@ class SecurityThreat:
     mitigation: str | None = None
     cwe_id: str | None = None  # Common Weakness Enumeration ID
     owasp_id: str | None = None  # OWASP Top 10 ID
+    rule_id: str | None = None  # Stable rule identifier (e.g. TS-INJ-001)
+    snippet: str | None = None  # Context window around the match
 
     def __str__(self) -> str:
-        return f"[{self.severity.name}] {self.category.name}: {self.title}"
+        prefix = f"[{self.rule_id}] " if self.rule_id else ""
+        return f"{prefix}[{self.severity.name}] {self.category.name}: {self.title}"
 
 
 @dataclass
@@ -113,6 +116,7 @@ class ThreatPattern:
     mitigation: str | None = None
     cwe_id: str | None = None
     owasp_id: str | None = None
+    rule_id: str | None = None
 
 
 @dataclass
@@ -148,160 +152,254 @@ class SecurityScanner:
     - No repeated .lower() calls inside inner loops
     """
 
+    # CWE and OWASP mappings keyed by rule_id
+    RULE_CWE_OWASP: dict[str, tuple[str, str]] = {
+        # Prompt injection — CWE-77 (command injection generalised) / OWASP LLM01
+        "TS-INJ-001": ("CWE-77", "OWASP-LLM01"),
+        "TS-INJ-002": ("CWE-77", "OWASP-LLM01"),
+        "TS-INJ-003": ("CWE-77", "OWASP-LLM01"),
+        "TS-INJ-004": ("CWE-77", "OWASP-LLM01"),
+        "TS-INJ-005": ("CWE-77", "OWASP-LLM01"),
+        "TS-INJ-006": ("CWE-77", "OWASP-LLM01"),
+        "TS-INJ-007": ("CWE-284", "OWASP-LLM01"),
+        "TS-INJ-008": ("CWE-284", "OWASP-LLM01"),
+        "TS-INJ-009": ("CWE-77", "OWASP-LLM01"),
+        "TS-INJ-010": ("CWE-77", "OWASP-LLM01"),
+        "TS-INJ-011": ("CWE-451", "OWASP-LLM01"),
+        "TS-INJ-012": ("CWE-451", "OWASP-LLM01"),
+        "TS-INJ-013": ("CWE-77", "OWASP-LLM01"),
+        "TS-INJ-014": ("CWE-77", "OWASP-LLM01"),
+        # Command injection — CWE-78 / OWASP A03
+        "TS-CMD-001": ("CWE-78", "OWASP-A03"),
+        "TS-CMD-002": ("CWE-78", "OWASP-A03"),
+        "TS-CMD-003": ("CWE-78", "OWASP-A03"),
+        "TS-CMD-004": ("CWE-78", "OWASP-A03"),
+        "TS-CMD-005": ("CWE-78", "OWASP-A03"),
+        "TS-CMD-006": ("CWE-78", "OWASP-A03"),
+        "TS-CMD-007": ("CWE-78", "OWASP-A03"),
+        "TS-CMD-008": ("CWE-78", "OWASP-A03"),
+        "TS-CMD-009": ("CWE-78", "OWASP-A03"),
+        "TS-CMD-010": ("CWE-94", "OWASP-A03"),
+        "TS-CMD-011": ("CWE-78", "OWASP-A03"),
+        # SQL injection — CWE-89 / OWASP A03
+        "TS-SQL-001": ("CWE-89", "OWASP-A03"),
+        "TS-SQL-002": ("CWE-89", "OWASP-A03"),
+        "TS-SQL-003": ("CWE-89", "OWASP-A03"),
+        "TS-SQL-004": ("CWE-89", "OWASP-A03"),
+        "TS-SQL-005": ("CWE-89", "OWASP-A03"),
+        "TS-SQL-006": ("CWE-89", "OWASP-A03"),
+        # XSS — CWE-79 / OWASP A03
+        "TS-XSS-001": ("CWE-79", "OWASP-A03"),
+        "TS-XSS-002": ("CWE-79", "OWASP-A03"),
+        "TS-XSS-003": ("CWE-79", "OWASP-A03"),
+        "TS-XSS-004": ("CWE-79", "OWASP-A03"),
+        "TS-XSS-005": ("CWE-79", "OWASP-A03"),
+        "TS-XSS-006": ("CWE-79", "OWASP-A03"),
+        "TS-XSS-007": ("CWE-79", "OWASP-A03"),
+        "TS-XSS-008": ("CWE-79", "OWASP-A03"),
+        # Path traversal — CWE-22 / OWASP A01
+        "TS-PTR-001": ("CWE-22", "OWASP-A01"),
+        "TS-PTR-002": ("CWE-22", "OWASP-A01"),
+        "TS-PTR-003": ("CWE-22", "OWASP-A01"),
+        "TS-PTR-004": ("CWE-22", "OWASP-A01"),
+        "TS-PTR-005": ("CWE-22", "OWASP-A01"),
+        "TS-PTR-006": ("CWE-22", "OWASP-A01"),
+        # Data exfiltration — CWE-200 / OWASP A01
+        "TS-EXF-001": ("CWE-200", "OWASP-A01"),
+        "TS-EXF-002": ("CWE-200", "OWASP-A01"),
+        "TS-EXF-003": ("CWE-200", "OWASP-A01"),
+        "TS-EXF-004": ("CWE-200", "OWASP-A01"),
+        "TS-EXF-005": ("CWE-200", "OWASP-A01"),
+        # SSRF — CWE-918 / OWASP A10
+        "TS-SSR-001": ("CWE-918", "OWASP-A10"),
+        "TS-SSR-002": ("CWE-918", "OWASP-A10"),
+        "TS-SSR-003": ("CWE-918", "OWASP-A10"),
+        "TS-SSR-004": ("CWE-918", "OWASP-A10"),
+        "TS-SSR-005": ("CWE-918", "OWASP-A10"),
+        "TS-SSR-006": ("CWE-918", "OWASP-A10"),
+        "TS-SSR-007": ("CWE-918", "OWASP-A10"),
+        "TS-SSR-008": ("CWE-918", "OWASP-A10"),
+        # Tool poisoning heuristics — CWE-77 / OWASP-LLM01
+        "TS-PSN-001": ("CWE-77", "OWASP-LLM01"),
+        "TS-PSN-002": ("CWE-116", "OWASP-LLM01"),
+        "TS-PSN-003": ("CWE-116", "OWASP-LLM01"),
+        "TS-PSN-004": ("CWE-77", "OWASP-LLM01"),
+        # Encoding — CWE-116 / OWASP A03
+        "TS-ENC-001": ("CWE-116", "OWASP-A03"),
+        "TS-ENC-002": ("CWE-116", "OWASP-A03"),
+    }
+
     # Prompt injection patterns - tool poisoning via descriptions
-    INJECTION_PATTERNS: list[tuple[str, str, ThreatSeverity]] = [
+    # Tuples: (regex, title, severity, rule_id)
+    INJECTION_PATTERNS: list[tuple[str, str, ThreatSeverity, str]] = [
         # Direct instruction override
         (
             r"ignore\s+(all\s+)?(previous|prior|above|system)\s+(instructions?|rules?|constraints?|prompts?)",
             "Instruction override attempt",
             ThreatSeverity.CRITICAL,
+            "TS-INJ-001",
         ),
         (
             r"(forget|disregard|override)\s+(everything|all|what)\s+(you|I)\s+(know|told|said)",
             "Memory manipulation attempt",
             ThreatSeverity.CRITICAL,
+            "TS-INJ-002",
         ),
         (
             r"from\s+now\s+on[,\s]+(you\s+)?(will|must|should|are)",
             "Behavioral override attempt",
             ThreatSeverity.CRITICAL,
+            "TS-INJ-003",
         ),
         # Role manipulation
         (
             r"you\s+are\s+(now\s+)?(a|an|the)\s+[a-z]+\s+(that|who|which)",
             "Role assignment injection",
             ThreatSeverity.HIGH,
+            "TS-INJ-004",
         ),
-        (r"pretend\s+(to\s+be|you\s+are|you're)", "Identity manipulation", ThreatSeverity.HIGH),
-        (r"act\s+as\s+(if|though|a|an)", "Behavioral manipulation", ThreatSeverity.MEDIUM),
+        (r"pretend\s+(to\s+be|you\s+are|you're)", "Identity manipulation", ThreatSeverity.HIGH, "TS-INJ-005"),
+        (r"act\s+as\s+(if|though|a|an)", "Behavioral manipulation", ThreatSeverity.MEDIUM, "TS-INJ-006"),
         # Security bypass
         (
             r"(bypass|circumvent|disable|ignore)\s+(security|safety|validation|auth)",
             "Security bypass attempt",
             ThreatSeverity.CRITICAL,
+            "TS-INJ-007",
         ),
         (
             r"(jailbreak|unlock|escape)\s+(mode|restrictions?|limits?)",
             "Jailbreak attempt",
             ThreatSeverity.CRITICAL,
+            "TS-INJ-008",
         ),
         # Hidden instructions
-        (r"<\s*(system|admin|root|sudo)\s*>", "Fake system tag injection", ThreatSeverity.HIGH),
+        (r"<\s*(system|admin|root|sudo)\s*>", "Fake system tag injection", ThreatSeverity.HIGH, "TS-INJ-009"),
         (
             r"\[\s*(system|admin|root)\s*(message|prompt|instruction)\s*\]",
             "Fake system message injection",
             ThreatSeverity.HIGH,
+            "TS-INJ-010",
         ),
         # Deception
         (
             r"(don'?t|never)\s+tell\s+(the\s+)?(user|anyone|human)",
             "Deception instruction",
             ThreatSeverity.CRITICAL,
+            "TS-INJ-011",
         ),
         (
             r"(secretly|silently|quietly|covertly)\s+(do|perform|execute)",
             "Covert action instruction",
             ThreatSeverity.CRITICAL,
+            "TS-INJ-012",
         ),
         # Output manipulation
         (
             r"always\s+(respond|reply|say|output)\s+with",
             "Output manipulation",
             ThreatSeverity.MEDIUM,
+            "TS-INJ-013",
         ),
         (
             r"(start|begin|prefix)\s+(every|all|each)\s+(response|reply|output)",
             "Response prefix manipulation",
             ThreatSeverity.MEDIUM,
+            "TS-INJ-014",
         ),
     ]
 
     # Command injection patterns
-    COMMAND_INJECTION_PATTERNS: list[tuple[str, str, ThreatSeverity]] = [
-        (r";\s*[a-zA-Z]+", "Command chaining with semicolon", ThreatSeverity.HIGH),
-        (r"\|\s*[a-zA-Z]+", "Pipe injection", ThreatSeverity.HIGH),
-        (r"`[^`]+`", "Backtick command execution", ThreatSeverity.CRITICAL),
-        (r"\$\([^)]+\)", "Subshell execution", ThreatSeverity.CRITICAL),
-        (r"\$\{[^}]+\}", "Variable expansion", ThreatSeverity.HIGH),
-        (r"&&\s*[a-zA-Z]+", "Command chaining with &&", ThreatSeverity.HIGH),
-        (r"\|\|\s*[a-zA-Z]+", "Command chaining with ||", ThreatSeverity.HIGH),
-        (r">\s*/", "File redirect to root", ThreatSeverity.CRITICAL),
-        (r"<\s*/etc/", "Reading sensitive files", ThreatSeverity.CRITICAL),
-        (r"eval\s*\(", "Eval usage", ThreatSeverity.CRITICAL),
-        (r"exec\s*\(", "Exec usage", ThreatSeverity.HIGH),
+    COMMAND_INJECTION_PATTERNS: list[tuple[str, str, ThreatSeverity, str]] = [
+        (r";\s*[a-zA-Z]+", "Command chaining with semicolon", ThreatSeverity.HIGH, "TS-CMD-001"),
+        (r"\|\s*[a-zA-Z]+", "Pipe injection", ThreatSeverity.HIGH, "TS-CMD-002"),
+        (r"`[^`]+`", "Backtick command execution", ThreatSeverity.CRITICAL, "TS-CMD-003"),
+        (r"\$\([^)]+\)", "Subshell execution", ThreatSeverity.CRITICAL, "TS-CMD-004"),
+        (r"\$\{[^}]+\}", "Variable expansion", ThreatSeverity.HIGH, "TS-CMD-005"),
+        (r"&&\s*[a-zA-Z]+", "Command chaining with &&", ThreatSeverity.HIGH, "TS-CMD-006"),
+        (r"\|\|\s*[a-zA-Z]+", "Command chaining with ||", ThreatSeverity.HIGH, "TS-CMD-007"),
+        (r">\s*/", "File redirect to root", ThreatSeverity.CRITICAL, "TS-CMD-008"),
+        (r"<\s*/etc/", "Reading sensitive files", ThreatSeverity.CRITICAL, "TS-CMD-009"),
+        (r"eval\s*\(", "Eval usage", ThreatSeverity.CRITICAL, "TS-CMD-010"),
+        (r"exec\s*\(", "Exec usage", ThreatSeverity.HIGH, "TS-CMD-011"),
     ]
 
     # SQL injection patterns
-    SQL_INJECTION_PATTERNS: list[tuple[str, str, ThreatSeverity]] = [
-        (r"'\s*(OR|AND)\s*'?\d*'?\s*=\s*'?\d*", "SQL boolean injection", ThreatSeverity.CRITICAL),
+    SQL_INJECTION_PATTERNS: list[tuple[str, str, ThreatSeverity, str]] = [
+        (r"'\s*(OR|AND)\s*'?\d*'?\s*=\s*'?\d*", "SQL boolean injection", ThreatSeverity.CRITICAL, "TS-SQL-001"),
         (
             r";\s*(DROP|DELETE|TRUNCATE|UPDATE|INSERT)\s+",
             "SQL destructive injection",
             ThreatSeverity.CRITICAL,
+            "TS-SQL-002",
         ),
-        (r"UNION\s+(ALL\s+)?SELECT", "SQL UNION injection", ThreatSeverity.CRITICAL),
-        (r"--\s*$", "SQL comment injection", ThreatSeverity.HIGH),
-        (r"/\*.*\*/", "SQL block comment", ThreatSeverity.MEDIUM),
-        (r"'\s*;\s*--", "SQL termination injection", ThreatSeverity.CRITICAL),
+        (r"UNION\s+(ALL\s+)?SELECT", "SQL UNION injection", ThreatSeverity.CRITICAL, "TS-SQL-003"),
+        (r"--\s*$", "SQL comment injection", ThreatSeverity.HIGH, "TS-SQL-004"),
+        (r"/\*.*\*/", "SQL block comment", ThreatSeverity.MEDIUM, "TS-SQL-005"),
+        (r"'\s*;\s*--", "SQL termination injection", ThreatSeverity.CRITICAL, "TS-SQL-006"),
     ]
 
     # XSS patterns
-    XSS_PATTERNS: list[tuple[str, str, ThreatSeverity]] = [
-        (r"<script[^>]*>", "Script tag injection", ThreatSeverity.CRITICAL),
-        (r"javascript\s*:", "JavaScript protocol", ThreatSeverity.CRITICAL),
-        (r"on(load|error|click|mouse\w+)\s*=", "Event handler injection", ThreatSeverity.HIGH),
-        (r"<iframe[^>]*>", "IFrame injection", ThreatSeverity.HIGH),
-        (r"<object[^>]*>", "Object tag injection", ThreatSeverity.HIGH),
-        (r"<embed[^>]*>", "Embed tag injection", ThreatSeverity.HIGH),
-        (r"expression\s*\(", "CSS expression", ThreatSeverity.HIGH),
-        (r"data:\s*text/html", "Data URI HTML", ThreatSeverity.HIGH),
+    XSS_PATTERNS: list[tuple[str, str, ThreatSeverity, str]] = [
+        (r"<script[^>]*>", "Script tag injection", ThreatSeverity.CRITICAL, "TS-XSS-001"),
+        (r"javascript\s*:", "JavaScript protocol", ThreatSeverity.CRITICAL, "TS-XSS-002"),
+        (r"on(load|error|click|mouse\w+)\s*=", "Event handler injection", ThreatSeverity.HIGH, "TS-XSS-003"),
+        (r"<iframe[^>]*>", "IFrame injection", ThreatSeverity.HIGH, "TS-XSS-004"),
+        (r"<object[^>]*>", "Object tag injection", ThreatSeverity.HIGH, "TS-XSS-005"),
+        (r"<embed[^>]*>", "Embed tag injection", ThreatSeverity.HIGH, "TS-XSS-006"),
+        (r"expression\s*\(", "CSS expression", ThreatSeverity.HIGH, "TS-XSS-007"),
+        (r"data:\s*text/html", "Data URI HTML", ThreatSeverity.HIGH, "TS-XSS-008"),
     ]
 
     # Path traversal patterns
-    PATH_TRAVERSAL_PATTERNS: list[tuple[str, str, ThreatSeverity]] = [
-        (r"\.\./", "Directory traversal (../)", ThreatSeverity.HIGH),
-        (r"\.\.\\", "Directory traversal (..\\)", ThreatSeverity.HIGH),
-        (r"%2e%2e[/%5c]", "URL-encoded traversal", ThreatSeverity.HIGH),
-        (r"/etc/(passwd|shadow|hosts)", "Sensitive file access", ThreatSeverity.CRITICAL),
-        (r"C:\\Windows\\", "Windows system directory", ThreatSeverity.HIGH),
-        (r"\\\\[a-zA-Z0-9]+\\", "UNC path", ThreatSeverity.MEDIUM),
+    PATH_TRAVERSAL_PATTERNS: list[tuple[str, str, ThreatSeverity, str]] = [
+        (r"\.\./", "Directory traversal (../)", ThreatSeverity.HIGH, "TS-PTR-001"),
+        (r"\.\.\\", "Directory traversal (..\\)", ThreatSeverity.HIGH, "TS-PTR-002"),
+        (r"%2e%2e[/%5c]", "URL-encoded traversal", ThreatSeverity.HIGH, "TS-PTR-003"),
+        (r"/etc/(passwd|shadow|hosts)", "Sensitive file access", ThreatSeverity.CRITICAL, "TS-PTR-004"),
+        (r"C:\\Windows\\", "Windows system directory", ThreatSeverity.HIGH, "TS-PTR-005"),
+        (r"\\\\[a-zA-Z0-9]+\\", "UNC path", ThreatSeverity.MEDIUM, "TS-PTR-006"),
     ]
 
     # Data exfiltration patterns
-    EXFILTRATION_PATTERNS: list[tuple[str, str, ThreatSeverity]] = [
+    EXFILTRATION_PATTERNS: list[tuple[str, str, ThreatSeverity, str]] = [
         (
             r"(send|post|transmit|upload)\s+(to|data\s+to)\s+https?://",
             "External data transmission",
             ThreatSeverity.CRITICAL,
+            "TS-EXF-001",
         ),
         (
             r"(read|access|get|fetch)\s+(all\s+)?(files?|data|credentials?|secrets?|keys?)",
             "Broad data access",
             ThreatSeverity.HIGH,
+            "TS-EXF-002",
         ),
         (
             r"(exfiltrate|extract|steal|copy)\s+(data|files?|information)",
             "Explicit exfiltration",
             ThreatSeverity.CRITICAL,
+            "TS-EXF-003",
         ),
-        (r"(curl|wget|fetch)\s+.*\s+-d\s+", "Command-line data exfiltration", ThreatSeverity.HIGH),
-        (r"base64\s+(encode|decode)", "Base64 encoding (possible obfuscation)", ThreatSeverity.LOW),
+        (r"(curl|wget|fetch)\s+.*\s+-d\s+", "Command-line data exfiltration", ThreatSeverity.HIGH, "TS-EXF-004"),
+        (r"base64\s+(encode|decode)", "Base64 encoding (possible obfuscation)", ThreatSeverity.LOW, "TS-EXF-005"),
     ]
 
     # SSRF patterns
-    SSRF_PATTERNS: list[tuple[str, str, ThreatSeverity]] = [
-        (r"(127\.0\.0\.1|localhost|0\.0\.0\.0)", "Localhost access", ThreatSeverity.MEDIUM),
-        (r"169\.254\.\d+\.\d+", "AWS metadata endpoint", ThreatSeverity.CRITICAL),
-        (r"192\.168\.\d+\.\d+", "Private network access", ThreatSeverity.MEDIUM),
-        (r"10\.\d+\.\d+\.\d+", "Private network access (10.x)", ThreatSeverity.MEDIUM),
+    SSRF_PATTERNS: list[tuple[str, str, ThreatSeverity, str]] = [
+        (r"(127\.0\.0\.1|localhost|0\.0\.0\.0)", "Localhost access", ThreatSeverity.MEDIUM, "TS-SSR-001"),
+        (r"169\.254\.\d+\.\d+", "AWS metadata endpoint", ThreatSeverity.CRITICAL, "TS-SSR-002"),
+        (r"192\.168\.\d+\.\d+", "Private network access", ThreatSeverity.MEDIUM, "TS-SSR-003"),
+        (r"10\.\d+\.\d+\.\d+", "Private network access (10.x)", ThreatSeverity.MEDIUM, "TS-SSR-004"),
         (
             r"172\.(1[6-9]|2\d|3[01])\.\d+\.\d+",
             "Private network access (172.x)",
             ThreatSeverity.MEDIUM,
+            "TS-SSR-005",
         ),
-        (r"file://", "File protocol access", ThreatSeverity.HIGH),
-        (r"gopher://", "Gopher protocol access", ThreatSeverity.HIGH),
-        (r"dict://", "Dict protocol access", ThreatSeverity.MEDIUM),
+        (r"file://", "File protocol access", ThreatSeverity.HIGH, "TS-SSR-006"),
+        (r"gopher://", "Gopher protocol access", ThreatSeverity.HIGH, "TS-SSR-007"),
+        (r"dict://", "Dict protocol access", ThreatSeverity.MEDIUM, "TS-SSR-008"),
     ]
 
     def __init__(
@@ -357,7 +455,8 @@ class SecurityScanner:
         for source_patterns, category, enabled in pattern_sources:
             if not enabled:
                 continue
-            for regex, title, severity in source_patterns:
+            for regex, title, severity, rule_id in source_patterns:
+                cwe_id, owasp_id = self.RULE_CWE_OWASP.get(rule_id, (None, None))
                 patterns.append(
                     ThreatPattern(
                         pattern=re.compile(regex, re.IGNORECASE),
@@ -365,6 +464,9 @@ class SecurityScanner:
                         severity=severity,
                         title=title,
                         description=f"Detected {title.lower()}",
+                        rule_id=rule_id,
+                        cwe_id=cwe_id,
+                        owasp_id=owasp_id,
                     )
                 )
 
@@ -496,6 +598,9 @@ class SecurityScanner:
         if self.enable_encoding_scan:
             threats.extend(self._scan_encoded_content_from_blobs(collected.raw_strings))
 
+        # Deduplicate by (rule_id, severity, location, matched_content)
+        threats = self._deduplicate_threats(threats)
+
         # Determine safety
         min_fail_severity = ThreatSeverity.MEDIUM if self.fail_on_medium else ThreatSeverity.HIGH
         is_safe = not any(t.severity.value >= min_fail_severity.value for t in threats)
@@ -518,6 +623,9 @@ class SecurityScanner:
             },
         )
 
+    # Characters of context to include on each side of a matched snippet
+    _SNIPPET_CONTEXT = 40
+
     def _scan_normalized_blob(self, blob: NormalizedText) -> list[SecurityThreat]:
         """Scan a pre-normalized text blob for threats."""
         threats = []
@@ -526,6 +634,7 @@ class SecurityScanner:
             # Patterns are compiled with re.IGNORECASE, so search original
             match = threat_pattern.pattern.search(blob.original)
             if match:
+                snippet = self._build_snippet(blob.original, match)
                 threats.append(
                     SecurityThreat(
                         category=threat_pattern.category,
@@ -537,10 +646,39 @@ class SecurityScanner:
                         mitigation=threat_pattern.mitigation,
                         cwe_id=threat_pattern.cwe_id,
                         owasp_id=threat_pattern.owasp_id,
+                        rule_id=threat_pattern.rule_id,
+                        snippet=snippet,
                     )
                 )
 
         return threats
+
+    @classmethod
+    def _build_snippet(cls, text: str, match: re.Match[str]) -> str:
+        """Build a context snippet around a regex match."""
+        ctx = cls._SNIPPET_CONTEXT
+        start = max(0, match.start() - ctx)
+        end = min(len(text), match.end() + ctx)
+        prefix = "..." if start > 0 else ""
+        suffix = "..." if end < len(text) else ""
+        return f"{prefix}{text[start:end]}{suffix}"
+
+    @staticmethod
+    def _deduplicate_threats(threats: list[SecurityThreat]) -> list[SecurityThreat]:
+        """Remove duplicate threats deterministically.
+
+        Deduplicates by (rule_id, severity, location, matched_content).
+        Threats without a rule_id are always kept (heuristic findings
+        already produce unique combinations).
+        """
+        seen: set[tuple[str | None, str, str, str | None]] = set()
+        unique: list[SecurityThreat] = []
+        for threat in threats:
+            key = (threat.rule_id, threat.severity.name, threat.location, threat.matched_content)
+            if key not in seen:
+                seen.add(key)
+                unique.append(threat)
+        return unique
 
     # Pre-computed instruction words set (avoid allocating list in hot path)
     _INSTRUCTION_WORDS: frozenset[str] = frozenset([
@@ -587,6 +725,7 @@ class SecurityScanner:
         if word_count > 0:
             instruction_density = instruction_count / word_count
             if instruction_density > 0.15:  # More than 15% instruction words
+                cwe, owasp = self.RULE_CWE_OWASP.get("TS-PSN-001", (None, None))
                 threats.append(
                     SecurityThreat(
                         category=ThreatCategory.TOOL_POISONING,
@@ -595,12 +734,16 @@ class SecurityScanner:
                         description=f"Description has unusually high density of instruction words ({instruction_density:.1%})",
                         location=location,
                         mitigation="Review description for hidden behavioral instructions",
+                        rule_id="TS-PSN-001",
+                        cwe_id=cwe,
+                        owasp_id=owasp,
                     )
                 )
 
         # Check for hidden unicode characters
         for char in self._INVISIBLE_CHARS:
             if char in description:
+                cwe, owasp = self.RULE_CWE_OWASP.get("TS-PSN-002", (None, None))
                 threats.append(
                     SecurityThreat(
                         category=ThreatCategory.TOOL_POISONING,
@@ -610,12 +753,16 @@ class SecurityScanner:
                         location=location,
                         matched_content=f"U+{ord(char):04X}",
                         mitigation="Remove invisible characters that may hide malicious content",
+                        rule_id="TS-PSN-002",
+                        cwe_id=cwe,
+                        owasp_id=owasp,
                     )
                 )
 
         # Check for homoglyph attacks
         for homoglyph, latin in self._HOMOGLYPHS.items():
             if homoglyph in description:
+                cwe, owasp = self.RULE_CWE_OWASP.get("TS-PSN-003", (None, None))
                 threats.append(
                     SecurityThreat(
                         category=ThreatCategory.TOOL_POISONING,
@@ -624,12 +771,16 @@ class SecurityScanner:
                         description=f"Non-Latin character resembling '{latin}' detected (may be deceptive)",
                         location=location,
                         mitigation="Use only ASCII characters in descriptions",
+                        rule_id="TS-PSN-003",
+                        cwe_id=cwe,
+                        owasp_id=owasp,
                     )
                 )
                 break  # Only report once
 
         # Check for excessive length (could hide instructions)
         if len(description) > 2000:
+            cwe, owasp = self.RULE_CWE_OWASP.get("TS-PSN-004", (None, None))
             threats.append(
                 SecurityThreat(
                     category=ThreatCategory.TOOL_POISONING,
@@ -638,6 +789,9 @@ class SecurityScanner:
                     description=f"Description is {len(description)} characters (may hide instructions)",
                     location=location,
                     mitigation="Keep descriptions concise and focused",
+                    rule_id="TS-PSN-004",
+                    cwe_id=cwe,
+                    owasp_id=owasp,
                 )
             )
 
@@ -666,6 +820,7 @@ class SecurityScanner:
                         )
                         decoded_threats = self._scan_normalized_blob(decoded_blob)
                         if decoded_threats:
+                            cwe, owasp = self.RULE_CWE_OWASP.get("TS-ENC-001", (None, None))
                             threats.append(
                                 SecurityThreat(
                                     category=ThreatCategory.TOOL_POISONING,
@@ -674,6 +829,9 @@ class SecurityScanner:
                                     description="Detected threats hidden in base64-encoded content",
                                     location=location,
                                     mitigation="Remove or validate all encoded content",
+                                    rule_id="TS-ENC-001",
+                                    cwe_id=cwe,
+                                    owasp_id=owasp,
                                 )
                             )
                             threats.extend(decoded_threats)
@@ -696,6 +854,7 @@ class SecurityScanner:
                         )
                         decoded_threats = self._scan_normalized_blob(decoded_blob)
                         if decoded_threats:
+                            cwe, owasp = self.RULE_CWE_OWASP.get("TS-ENC-002", (None, None))
                             threats.append(
                                 SecurityThreat(
                                     category=ThreatCategory.TOOL_POISONING,
@@ -704,6 +863,9 @@ class SecurityScanner:
                                     description="Detected threats hidden in hex-encoded content",
                                     location=location,
                                     mitigation="Remove or validate all encoded content",
+                                    rule_id="TS-ENC-002",
+                                    cwe_id=cwe,
+                                    owasp_id=owasp,
                                 )
                             )
                             threats.extend(decoded_threats)
@@ -726,7 +888,7 @@ class SecurityScanner:
         Tool poisoning is a 2025/2026 attack vector where malicious
         instructions are hidden in tool descriptions to manipulate AI behavior.
         """
-        threats = []
+        threats: list[SecurityThreat] = []
 
         if not description:
             return threats

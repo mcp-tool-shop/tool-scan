@@ -14,8 +14,6 @@ from __future__ import annotations
 import base64
 from typing import Any
 
-import pytest
-
 from tool_scan.security_scanner import SecurityScanner, ThreatCategory
 
 

@@ -14,18 +14,12 @@ Tests covering:
 from __future__ import annotations
 
 import json
-import sys
-from io import StringIO
 from pathlib import Path
-from typing import Any
-from unittest.mock import patch
 
 import pytest
 
 from tool_scan.cli import load_tool, main
 from tool_scan.grader import MCPToolGrader
-from tool_scan.security_scanner import SecurityScanner
-
 
 # =============================================================================
 # 1. Malformed JSON Handling (4 tests)

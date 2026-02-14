@@ -273,7 +273,7 @@ class ComplianceChecker:
 
     def _check_name_format(self, tool: dict[str, Any]) -> list[ComplianceCheck]:
         """Check tool name format requirements."""
-        checks = []
+        checks: list[ComplianceCheck] = []
         name = tool.get("name", "")
 
         if not name:
@@ -316,7 +316,7 @@ class ComplianceChecker:
 
     def _check_schema_structure(self, tool: dict[str, Any]) -> list[ComplianceCheck]:
         """Check input schema structure requirements."""
-        checks = []
+        checks: list[ComplianceCheck] = []
         schema = tool.get("inputSchema")
 
         if not schema:
@@ -388,7 +388,7 @@ class ComplianceChecker:
 
     def _check_annotation_types(self, tool: dict[str, Any]) -> list[ComplianceCheck]:
         """Check annotation type correctness."""
-        checks = []
+        checks: list[ComplianceCheck] = []
         annotations = tool.get("annotations")
 
         if annotations is None:
@@ -552,7 +552,7 @@ class ComplianceChecker:
 
     def _check_schema_quality(self, tool: dict[str, Any]) -> list[ComplianceCheck]:
         """Check input schema quality."""
-        checks = []
+        checks: list[ComplianceCheck] = []
         schema = tool.get("inputSchema") or {}
         if not isinstance(schema, dict):
             return checks

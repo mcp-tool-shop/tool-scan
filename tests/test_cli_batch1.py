@@ -13,25 +13,18 @@ Tests for src/tool_scan/cli.py covering:
 from __future__ import annotations
 
 import json
-import subprocess
-import sys
 from io import StringIO
 from pathlib import Path
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import patch
 
 from tool_scan.cli import (
     Colors,
     colorize_grade,
     colorize_score,
-    load_tool,
     main,
     print_report,
-    print_summary_table,
 )
 from tool_scan.grader import Grade, GradeReport, Remark, RemarkCategory
-
 
 # =============================================================================
 # 1. Basic CLI Operations (5 tests)
@@ -117,7 +110,7 @@ class TestOutputModes:
         tool_file = tmp_path / "tool.json"
         tool_file.write_text(json.dumps(valid_minimal_tool))
 
-        result = main([str(tool_file)])
+        main([str(tool_file)])
 
         captured = capsys.readouterr()
         assert "Tool:" in captured.out
@@ -370,7 +363,7 @@ class TestBatchProcessing:
         (tmp_path / "valid.json").write_text(json.dumps(valid_minimal_tool))
         (tmp_path / "invalid.json").write_text("not json")
 
-        result = main([str(tmp_path / "valid.json"), str(tmp_path / "invalid.json")])
+        main([str(tmp_path / "valid.json"), str(tmp_path / "invalid.json")])
 
         # Should process valid file even with error
         captured = capsys.readouterr()

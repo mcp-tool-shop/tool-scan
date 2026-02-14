@@ -12,12 +12,7 @@ Tests for src/tool_scan/grader.py and src/tool_scan/schema_validator.py covering
 
 from __future__ import annotations
 
-from typing import Any
-
-import pytest
-
-from tool_scan.grader import Grade, GradeReport, MCPToolGrader, Remark, RemarkCategory
-
+from tool_scan.grader import Grade, GradeReport, MCPToolGrader
 
 # =============================================================================
 # 1. Grade Calculation Tests (4 tests)
