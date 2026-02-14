@@ -4,10 +4,10 @@
 
 **Security scanner for MCP (Model Context Protocol) tools**
 
-[![PyPI version](https://img.shields.io/pypi/v/tool-scan.svg)](https://pypi.org/project/tool-scan/)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
-[![Tests](https://img.shields.io/badge/tests-147%20passed-brightgreen.svg)]()
+<a href="https://github.com/mcp-tool-shop-org/tool-scan/actions/workflows/test.yml"><img src="https://img.shields.io/github/actions/workflow/status/mcp-tool-shop-org/tool-scan/test.yml?branch=main&style=flat-square&label=CI" alt="CI"></a>
+<a href="https://pypi.org/project/tool-scan/"><img src="https://img.shields.io/pypi/v/tool-scan?style=flat-square&logo=pypi&logoColor=white" alt="PyPI"></a>
+<img src="https://img.shields.io/badge/python-3.10%2B-blue?style=flat-square&logo=python&logoColor=white" alt="Python 3.10+">
+<a href="LICENSE"><img src="https://img.shields.io/github/license/mcp-tool-shop-org/tool-scan?style=flat-square" alt="License"></a>
 
 [Installation](#installation) •
 [Quick Start](#quick-start) •
