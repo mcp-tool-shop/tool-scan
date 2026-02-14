@@ -23,7 +23,7 @@ References:
 - MCP Security Best Practices (2026)
 """
 
-__version__ = "1.1.0"
+__version__ = "1.1.1"
 __author__ = "MCP Tool Shop"
 
 from .compliance_checker import (
