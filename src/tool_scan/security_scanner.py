@@ -517,6 +517,9 @@ class SecurityScanner:
         if self.enable_encoding_scan:
             threats.extend(self._scan_encoded_content_from_blobs(collected.raw_strings))
 
+        # Deduplicate by (rule_id, severity, location, matched_content)
+        threats = self._deduplicate_threats(threats)
+
         # Determine safety
         min_fail_severity = ThreatSeverity.MEDIUM if self.fail_on_medium else ThreatSeverity.HIGH
         is_safe = not any(t.severity.value >= min_fail_severity.value for t in threats)
@@ -563,6 +566,23 @@ class SecurityScanner:
                 )
 
         return threats
+
+    @staticmethod
+    def _deduplicate_threats(threats: list[SecurityThreat]) -> list[SecurityThreat]:
+        """Remove duplicate threats deterministically.
+
+        Deduplicates by (rule_id, severity, location, matched_content).
+        Threats without a rule_id are always kept (heuristic findings
+        already produce unique combinations).
+        """
+        seen: set[tuple[str | None, str, str, str | None]] = set()
+        unique: list[SecurityThreat] = []
+        for threat in threats:
+            key = (threat.rule_id, threat.severity.name, threat.location, threat.matched_content)
+            if key not in seen:
+                seen.add(key)
+                unique.append(threat)
+        return unique
 
     # Pre-computed instruction words set (avoid allocating list in hot path)
     _INSTRUCTION_WORDS: frozenset[str] = frozenset([
