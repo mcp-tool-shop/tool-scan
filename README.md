@@ -322,6 +322,12 @@ for remark in report.remarks:
 
 Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
+## Support
+
+- **Questions / help:** [Discussions](https://github.com/mcp-tool-shop-org/tool-scan/discussions)
+- **Bug reports:** [Issues](https://github.com/mcp-tool-shop-org/tool-scan/issues)
+- **Security:** [SECURITY.md](SECURITY.md)
+
 ## License
 
 MIT License - see [LICENSE](LICENSE) for details.
