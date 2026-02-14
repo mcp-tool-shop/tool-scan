@@ -37,6 +37,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from .baseline import BaselineFile, compare_with_baseline, load_baseline, save_baseline
 from .config import ToolScanConfig, load_config
 from .grader import Grade, GradeReport, MCPToolGrader, Remark
 from .junit import grade_reports_to_junit
@@ -407,6 +408,26 @@ Exit codes:
         help="Config file (.tool-scan.toml, .tool-scan.json, or pyproject.toml)",
     )
 
+    parser.add_argument(
+        "--baseline",
+        metavar="PATH",
+        default=None,
+        help="Baseline file for comparing against known findings",
+    )
+
+    parser.add_argument(
+        "--save-baseline",
+        metavar="PATH",
+        default=None,
+        help="Save current findings as a new baseline file",
+    )
+
+    parser.add_argument(
+        "--fail-on-new",
+        action="store_true",
+        help="Exit 1 only for new findings (requires --baseline)",
+    )
+
     parsed = parser.parse_args(args)
 
     # Load config file (explicit path or auto-discover)
@@ -457,6 +478,20 @@ Exit codes:
     for name in list(reports):
         reports[name] = _apply_ignores(reports[name], cfg)
 
+    # Save baseline if requested
+    if parsed.save_baseline and reports:
+        count = save_baseline(reports, parsed.save_baseline)
+        print(f"Saved baseline with {count} findings to {parsed.save_baseline}", file=sys.stderr)
+
+    # Load and apply baseline comparison
+    baseline: BaselineFile | None = None
+    if parsed.baseline:
+        try:
+            baseline = load_baseline(parsed.baseline)
+        except (FileNotFoundError, ValueError) as e:
+            print(f"Error loading baseline: {e}", file=sys.stderr)
+            return 2
+
     # Output errors
     if errors:
         for error in errors:
@@ -477,6 +512,16 @@ Exit codes:
         print(output_text)
 
     # Determine exit code
+    if parsed.fail_on_new and baseline:
+        # Only fail on NEW findings not in the baseline
+        has_new = False
+        for report in reports.values():
+            comparison = compare_with_baseline(report, baseline)
+            if comparison.has_new:
+                has_new = True
+                break
+        return 1 if has_new else 0
+
     failed = any(
         r.score < parsed.min_score or (parsed.strict and not r.is_safe) for r in reports.values()
     )
