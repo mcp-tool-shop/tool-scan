@@ -82,6 +82,10 @@ class Remark:
     description: str
     action: str | None = None
     reference: str | None = None
+    rule_id: str | None = None
+    cwe_id: str | None = None
+    owasp_id: str | None = None
+    snippet: str | None = None
 
     def __str__(self) -> str:
         lines = [f"{self.category.value}: {self.title}"]
@@ -151,6 +155,10 @@ class GradeReport:
                     "description": r.description,
                     "action": r.action,
                     "reference": r.reference,
+                    "rule_id": r.rule_id,
+                    "cwe_id": r.cwe_id,
+                    "owasp_id": r.owasp_id,
+                    "snippet": r.snippet,
                 }
                 for r in self.remarks
             ],
@@ -309,6 +317,10 @@ class MCPToolGrader:
                     description=threat.description,
                     action=threat.mitigation,
                     reference=threat.owasp_id or threat.cwe_id,
+                    rule_id=threat.rule_id,
+                    cwe_id=threat.cwe_id,
+                    owasp_id=threat.owasp_id,
+                    snippet=threat.snippet,
                 )
             )
 
