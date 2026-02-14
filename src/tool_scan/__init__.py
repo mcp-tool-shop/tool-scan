@@ -23,7 +23,9 @@ References:
 - MCP Security Best Practices (2026)
 """
 
-__version__ = "1.0.0"
+from importlib.metadata import version as _pkg_version
+
+__version__ = _pkg_version("tool-scan")
 __author__ = "MCP Tool Shop"
 
 from .compliance_checker import (
