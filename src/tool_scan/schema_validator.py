@@ -289,15 +289,19 @@ class SchemaValidator:
         # Check logical consistency
         minimum = node.get("minimum")
         maximum = node.get("maximum")
-        if minimum is not None and maximum is not None:
-            if isinstance(minimum, (int, float)) and isinstance(maximum, (int, float)):
-                if minimum > maximum:
-                    issues.append(
-                        SchemaIssue(
-                            path=path,
-                            message="minimum cannot be greater than maximum",
-                        )
-                    )
+        if (
+            minimum is not None
+            and maximum is not None
+            and isinstance(minimum, (int, float))
+            and isinstance(maximum, (int, float))
+            and minimum > maximum
+        ):
+            issues.append(
+                SchemaIssue(
+                    path=path,
+                    message="minimum cannot be greater than maximum",
+                )
+            )
 
     def _validate_string_constraints(
         self,
@@ -306,23 +310,21 @@ class SchemaValidator:
         issues: list[SchemaIssue],
     ) -> None:
         """Validate string constraint keywords."""
-        if "minLength" in node:
-            if not isinstance(node["minLength"], int) or node["minLength"] < 0:
-                issues.append(
-                    SchemaIssue(
-                        path=f"{path}.minLength",
-                        message="minLength must be a non-negative integer",
-                    )
+        if "minLength" in node and (not isinstance(node["minLength"], int) or node["minLength"] < 0):
+            issues.append(
+                SchemaIssue(
+                    path=f"{path}.minLength",
+                    message="minLength must be a non-negative integer",
                 )
+            )
 
-        if "maxLength" in node:
-            if not isinstance(node["maxLength"], int) or node["maxLength"] < 0:
-                issues.append(
-                    SchemaIssue(
-                        path=f"{path}.maxLength",
-                        message="maxLength must be a non-negative integer",
-                    )
+        if "maxLength" in node and (not isinstance(node["maxLength"], int) or node["maxLength"] < 0):
+            issues.append(
+                SchemaIssue(
+                    path=f"{path}.maxLength",
+                    message="maxLength must be a non-negative integer",
                 )
+            )
 
         # Check pattern is valid regex
         if "pattern" in node:
@@ -348,14 +350,18 @@ class SchemaValidator:
         # Check logical consistency
         min_len = node.get("minLength", 0)
         max_len = node.get("maxLength")
-        if max_len is not None and isinstance(min_len, int) and isinstance(max_len, int):
-            if min_len > max_len:
-                issues.append(
-                    SchemaIssue(
-                        path=path,
-                        message="minLength cannot be greater than maxLength",
-                    )
+        if (
+            max_len is not None
+            and isinstance(min_len, int)
+            and isinstance(max_len, int)
+            and min_len > max_len
+        ):
+            issues.append(
+                SchemaIssue(
+                    path=path,
+                    message="minLength cannot be greater than maxLength",
                 )
+            )
 
     def _validate_array_constraints(
         self,
@@ -365,23 +371,21 @@ class SchemaValidator:
         issues: list[SchemaIssue],
     ) -> None:
         """Validate array constraint keywords."""
-        if "minItems" in node:
-            if not isinstance(node["minItems"], int) or node["minItems"] < 0:
-                issues.append(
-                    SchemaIssue(
-                        path=f"{path}.minItems",
-                        message="minItems must be a non-negative integer",
-                    )
+        if "minItems" in node and (not isinstance(node["minItems"], int) or node["minItems"] < 0):
+            issues.append(
+                SchemaIssue(
+                    path=f"{path}.minItems",
+                    message="minItems must be a non-negative integer",
                 )
+            )
 
-        if "maxItems" in node:
-            if not isinstance(node["maxItems"], int) or node["maxItems"] < 0:
-                issues.append(
-                    SchemaIssue(
-                        path=f"{path}.maxItems",
-                        message="maxItems must be a non-negative integer",
-                    )
+        if "maxItems" in node and (not isinstance(node["maxItems"], int) or node["maxItems"] < 0):
+            issues.append(
+                SchemaIssue(
+                    path=f"{path}.maxItems",
+                    message="maxItems must be a non-negative integer",
                 )
+            )
 
         if "uniqueItems" in node and not isinstance(node["uniqueItems"], bool):
             issues.append(
@@ -394,30 +398,32 @@ class SchemaValidator:
         # items validation
         if "items" in node:
             items = node["items"]
-            if dialect == SchemaDialect.DRAFT_2020_12:
-                # In 2020-12, items is a single schema
-                if isinstance(items, list):
-                    issues.append(
-                        SchemaIssue(
-                            path=f"{path}.items",
-                            message="In 2020-12, use prefixItems for tuple validation",
-                            is_error=False,
-                            suggestion="Replace items array with prefixItems",
-                        )
+            # In 2020-12, items is a single schema
+            if dialect == SchemaDialect.DRAFT_2020_12 and isinstance(items, list):
+                issues.append(
+                    SchemaIssue(
+                        path=f"{path}.items",
+                        message="In 2020-12, use prefixItems for tuple validation",
+                        is_error=False,
+                        suggestion="Replace items array with prefixItems",
                     )
+                )
 
         # Check logical consistency
         min_items = node.get("minItems", 0)
         max_items = node.get("maxItems")
-        if max_items is not None:
-            if isinstance(min_items, int) and isinstance(max_items, int):
-                if min_items > max_items:
-                    issues.append(
-                        SchemaIssue(
-                            path=path,
-                            message="minItems cannot be greater than maxItems",
-                        )
-                    )
+        if (
+            max_items is not None
+            and isinstance(min_items, int)
+            and isinstance(max_items, int)
+            and min_items > max_items
+        ):
+            issues.append(
+                SchemaIssue(
+                    path=path,
+                    message="minItems cannot be greater than maxItems",
+                )
+            )
 
     def _validate_object_constraints(
         self,
@@ -427,23 +433,25 @@ class SchemaValidator:
         issues: list[SchemaIssue],
     ) -> None:
         """Validate object constraint keywords."""
-        if "minProperties" in node:
-            if not isinstance(node["minProperties"], int) or node["minProperties"] < 0:
-                issues.append(
-                    SchemaIssue(
-                        path=f"{path}.minProperties",
-                        message="minProperties must be a non-negative integer",
-                    )
+        if "minProperties" in node and (
+            not isinstance(node["minProperties"], int) or node["minProperties"] < 0
+        ):
+            issues.append(
+                SchemaIssue(
+                    path=f"{path}.minProperties",
+                    message="minProperties must be a non-negative integer",
                 )
+            )
 
-        if "maxProperties" in node:
-            if not isinstance(node["maxProperties"], int) or node["maxProperties"] < 0:
-                issues.append(
-                    SchemaIssue(
-                        path=f"{path}.maxProperties",
-                        message="maxProperties must be a non-negative integer",
-                    )
+        if "maxProperties" in node and (
+            not isinstance(node["maxProperties"], int) or node["maxProperties"] < 0
+        ):
+            issues.append(
+                SchemaIssue(
+                    path=f"{path}.maxProperties",
+                    message="maxProperties must be a non-negative integer",
                 )
+            )
 
         # required validation
         if "required" in node:

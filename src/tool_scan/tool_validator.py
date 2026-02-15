@@ -532,19 +532,23 @@ class MCPToolValidator:
 
         # Validate string constraints
         prop_type = schema.get("type")
-        if prop_type == "string":
-            # Check for pattern/format for strings
-            if "pattern" not in schema and "format" not in schema and "enum" not in schema:
-                if "maxLength" not in schema:
-                    issues.append(
-                        ValidationIssue(
-                            code="STRING_NO_CONSTRAINTS",
-                            message=f"String property '{name}' has no validation constraints",
-                            severity=ValidationSeverity.INFO,
-                            field=field_path,
-                            suggestion="Consider adding maxLength, pattern, or format",
-                        )
-                    )
+        # Check for pattern/format for strings
+        if (
+            prop_type == "string"
+            and "pattern" not in schema
+            and "format" not in schema
+            and "enum" not in schema
+            and "maxLength" not in schema
+        ):
+            issues.append(
+                ValidationIssue(
+                    code="STRING_NO_CONSTRAINTS",
+                    message=f"String property '{name}' has no validation constraints",
+                    severity=ValidationSeverity.INFO,
+                    field=field_path,
+                    suggestion="Consider adding maxLength, pattern, or format",
+                )
+            )
 
         return issues
 
@@ -673,17 +677,19 @@ class MCPToolValidator:
             if not isinstance(prop_schema, dict):
                 continue
 
-            if any(hint in prop_name.lower() for hint in file_property_hints):
-                if "pattern" not in prop_schema:
-                    issues.append(
-                        ValidationIssue(
-                            code="SECURITY_PATH_TRAVERSAL_RISK",
-                            message=f"File path property '{prop_name}' has no pattern validation",
-                            severity=ValidationSeverity.WARNING,
-                            field=f"inputSchema.properties.{prop_name}",
-                            suggestion="Add pattern to prevent path traversal (e.g., reject ../)",
-                        )
+            if (
+                any(hint in prop_name.lower() for hint in file_property_hints)
+                and "pattern" not in prop_schema
+            ):
+                issues.append(
+                    ValidationIssue(
+                        code="SECURITY_PATH_TRAVERSAL_RISK",
+                        message=f"File path property '{prop_name}' has no pattern validation",
+                        severity=ValidationSeverity.WARNING,
+                        field=f"inputSchema.properties.{prop_name}",
+                        suggestion="Add pattern to prevent path traversal (e.g., reject ../)",
                     )
+                )
 
         return issues
 
